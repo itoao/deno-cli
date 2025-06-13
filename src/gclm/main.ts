@@ -1,4 +1,4 @@
-import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.54.0";
+import { query, type SDKMessage } from "@anthropic-ai/claude-code";
 
 interface GitFileChange {
   path: string;
@@ -7,20 +7,18 @@ interface GitFileChange {
 }
 
 async function getGitStagedFiles(): Promise<GitFileChange[]> {
-  const statusProcess = Deno.run({
-    cmd: ["git", "diff", "--cached", "--name-status"],
+  const statusProcess = new Deno.Command("git", {
+    args: ["diff", "--cached", "--name-status"],
     stdout: "piped",
     stderr: "piped",
   });
   
-  const statusResult = await statusProcess.status();
+  const statusResult = await statusProcess.output();
   if (!statusResult.success) {
     throw new Error("Failed to get git diff --cached");
   }
   
-  const rawOutput = await statusProcess.output();
-  const statusOutput = new TextDecoder().decode(rawOutput);
-  statusProcess.close();
+  const statusOutput = new TextDecoder().decode(statusResult.stdout);
   const stagedFiles: GitFileChange[] = [];
   
   for (const line of statusOutput.split('\n').filter(l => l.trim())) {
@@ -29,15 +27,14 @@ async function getGitStagedFiles(): Promise<GitFileChange[]> {
       const status = parts[0];
       const path = parts[1];
       
-      const diffProcess = Deno.run({
-        cmd: ["git", "diff", "--cached", path],
+      const diffProcess = new Deno.Command("git", {
+        args: ["diff", "--cached", path],
         stdout: "piped",
         stderr: "piped",
       });
       
-      const rawDiff = await diffProcess.output();
-      const diff = new TextDecoder().decode(rawDiff);
-      diffProcess.close();
+      const diffResult = await diffProcess.output();
+      const diff = new TextDecoder().decode(diffResult.stdout);
       
       stagedFiles.push({
         path,
@@ -81,24 +78,39 @@ Return a JSON array where each element is an array of file paths to commit toget
 Return ONLY the JSON array, no other text.`;
 
   try {
-    const anthropic = new Anthropic({
-      apiKey: Deno.env.get('ANTHROPIC_API_KEY'),
-    });
+    const messages: SDKMessage[] = [];
     
-    const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 1024,
-      messages: [{
-        role: 'user',
-        content: prompt
-      }]
-    });
+    for await (const message of query({
+      prompt,
+      abortController: new AbortController(),
+      options: {
+        maxTurns: 2,
+      },
+    })) {
+      messages.push(message);
+    }
     
-    const content = response.content[0];
-    if (content.type === 'text') {
-      const groupsText = content.text.trim();
-      const groupPaths: string[][] = JSON.parse(groupsText);
-      return convertPathsToFileGroups(groupPaths, files);
+    // Try to find result in various message formats
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      
+      // Check result type
+      if (message.type === 'result' && 'result' in message && message.result) {
+        const groupsText = String(message.result).trim();
+        const groupPaths: string[][] = JSON.parse(groupsText);
+        return convertPathsToFileGroups(groupPaths, files);
+      }
+      
+      // Check assistant message
+      if (message.type === 'assistant' && 'message' in message && message.message?.content) {
+        for (const content of message.message.content) {
+          if (content.type === 'text' && content.text) {
+            const groupsText = String(content.text).trim();
+            const groupPaths: string[][] = JSON.parse(groupsText);
+            return convertPathsToFileGroups(groupPaths, files);
+          }
+        }
+      }
     }
     
     throw new Error("No valid response found");
@@ -171,22 +183,35 @@ Rules:
 Return only the title.`;
 
   try {
-    const anthropic = new Anthropic({
-      apiKey: Deno.env.get('ANTHROPIC_API_KEY'),
-    });
+    const messages: SDKMessage[] = [];
     
-    const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 100,
-      messages: [{
-        role: 'user',
-        content: prompt
-      }]
-    });
+    for await (const message of query({
+      prompt,
+      abortController: new AbortController(),
+      options: {
+        maxTurns: 2,
+      },
+    })) {
+      messages.push(message);
+    }
     
-    const content = response.content[0];
-    if (content.type === 'text') {
-      return content.text.trim();
+    // Try to find result in various message formats
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      
+      // Check result type
+      if (message.type === 'result' && 'result' in message && message.result) {
+        return String(message.result).trim();
+      }
+      
+      // Check assistant message
+      if (message.type === 'assistant' && 'message' in message && message.message?.content) {
+        for (const content of message.message.content) {
+          if (content.type === 'text' && content.text) {
+            return String(content.text).trim();
+          }
+        }
+      }
     }
     
     throw new Error("No valid response found");
@@ -208,55 +233,51 @@ async function createCommit(files: GitFileChange[], title: string): Promise<void
   const filePaths = files.map(f => f.path);
   
   // Reset staging area
-  const resetProcess = Deno.run({
-    cmd: ["git", "reset"],
+  const resetProcess = new Deno.Command("git", {
+    args: ["reset"],
     stdout: "piped",
     stderr: "piped",
   });
-  await resetProcess.status();
-  resetProcess.close();
+  await resetProcess.output();
   
   // Add only files for this commit
-  const addProcess = Deno.run({
-    cmd: ["git", "add", ...filePaths],
+  const addProcess = new Deno.Command("git", {
+    args: ["add", ...filePaths],
     stdout: "piped",
     stderr: "piped",
   });
   
-  const addResult = await addProcess.status();
+  const addResult = await addProcess.output();
   if (!addResult.success) {
-    const error = new TextDecoder().decode(await addProcess.stderrOutput());
+    const error = new TextDecoder().decode(addResult.stderr);
     throw new Error(`Failed to add files: ${error}`);
   }
-  addProcess.close();
   
   // Check if there are changes to commit
-  const statusProcess = Deno.run({
-    cmd: ["git", "diff", "--cached", "--quiet"],
+  const statusProcess = new Deno.Command("git", {
+    args: ["diff", "--cached", "--quiet"],
     stdout: "piped",
     stderr: "piped",
   });
   
-  const statusResult = await statusProcess.status();
-  statusProcess.close();
+  const statusResult = await statusProcess.output();
   if (statusResult.success) {
     console.log(`⚠️ No changes to commit for: ${filePaths.join(', ')}`);
     return;
   }
   
   // Create commit
-  const commitProcess = Deno.run({
-    cmd: ["git", "commit", "-m", title],
+  const commitProcess = new Deno.Command("git", {
+    args: ["commit", "-m", title],
     stdout: "piped",
     stderr: "piped",
   });
   
-  const commitResult = await commitProcess.status();
+  const commitResult = await commitProcess.output();
   if (!commitResult.success) {
-    const error = new TextDecoder().decode(await commitProcess.stderrOutput());
+    const error = new TextDecoder().decode(commitResult.stderr);
     throw new Error(`Failed to commit: ${error}`);
   }
-  commitProcess.close();
   
   console.log(`✅ ${title}`);
 }
