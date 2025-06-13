@@ -1,3 +1,5 @@
+import { $ } from "jsr:@david/dax@0.40.0";
+import { parseArgs } from "node:util";
 import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code";
 
 interface GitFileChange {
@@ -7,26 +9,29 @@ interface GitFileChange {
 }
 
 
-const MAX_DIFF_PREVIEW_LINES = 5;
-const MAX_COMMIT_TITLE_LENGTH = 50;
-const QUERY_OPTIONS = {
-  maxTurns: 2,
-} as const;
+interface Config {
+  maxDiffPreviewLines: number;
+  maxCommitTitleLength: number;
+  queryOptions: {
+    maxTurns: number;
+  };
+}
+
+const CONFIG: Config = {
+  maxDiffPreviewLines: 5,
+  maxCommitTitleLength: 50,
+  queryOptions: {
+    maxTurns: 2,
+  },
+};
 
 async function executeGitCommand(args: string[]): Promise<string> {
-  const process = new Deno.Command("git", {
-    args,
-    stdout: "piped",
-    stderr: "piped",
-  });
-  
-  const result = await process.output();
-  if (!result.success) {
-    const error = new TextDecoder().decode(result.stderr);
-    throw new Error(`Git command failed: ${args.join(' ')} - ${error}`);
+  try {
+    const result = await $`git ${args}`.text();
+    return result;
+  } catch (error) {
+    throw new Error(`Git command failed: git ${args.join(' ')} - ${error}`);
   }
-  
-  return new TextDecoder().decode(result.stdout);
 }
 
 async function getGitStagedFiles(): Promise<GitFileChange[]> {
@@ -63,7 +68,7 @@ async function getGitStagedFiles(): Promise<GitFileChange[]> {
 
 function createFilePreview(file: GitFileChange): string {
   const diffLines = file.diff.split('\n');
-  const preview = diffLines.slice(0, MAX_DIFF_PREVIEW_LINES).join('\n');
+  const preview = diffLines.slice(0, CONFIG.maxDiffPreviewLines).join('\n');
   return `- ${file.path} (${file.status})\n  Changes: ${preview}`;
 }
 
@@ -103,7 +108,7 @@ Return ONLY the JSON array, no other text.`;
     for await (const message of query({
       prompt,
       abortController,
-      options: QUERY_OPTIONS,
+      options: CONFIG.queryOptions,
     })) {
       messages.push(message);
     }
@@ -271,7 +276,7 @@ ${diffSample}
 Rules:
 - Use conventional commit format (feat:, fix:, docs:, refactor:, test:, config:, chore:)
 - Be specific about what changed
-- Max ${MAX_COMMIT_TITLE_LENGTH} characters
+- Max ${CONFIG.maxCommitTitleLength} characters
 - No quotes
 - IMPORTANT: Return ONLY the commit title, no explanations or additional text
 
@@ -331,7 +336,7 @@ async function generateCommitTitle(files: GitFileChange[]): Promise<string> {
     for await (const message of query({
       prompt,
       abortController,
-      options: QUERY_OPTIONS,
+      options: CONFIG.queryOptions,
     })) {
       messages.push(message);
     }
@@ -341,8 +346,8 @@ async function generateCommitTitle(files: GitFileChange[]): Promise<string> {
       throw new Error("No valid title found in messages");
     }
     
-    return title.length > MAX_COMMIT_TITLE_LENGTH 
-      ? title.substring(0, MAX_COMMIT_TITLE_LENGTH - 3) + '...'
+    return title.length > CONFIG.maxCommitTitleLength 
+      ? title.substring(0, CONFIG.maxCommitTitleLength - 3) + '...'
       : title;
   } catch (error) {
     console.warn("⚠️ Failed to generate title, using fallback:", error instanceof Error ? error.message : String(error));
@@ -388,8 +393,49 @@ async function processCommitGroup(group: GitFileChange[], index: number, total: 
 }
 
 async function main() {
+  const parsed = parseArgs({
+    options: {
+      help: {
+        type: "boolean",
+        short: "h",
+      },
+      version: {
+        type: "boolean",
+        short: "v",
+      },
+      verbose: {
+        type: "boolean",
+        default: false,
+      },
+    },
+    allowPositionals: true,
+  });
+
+  if (parsed.values.help) {
+    console.log(`Git Commit LLM (gclm) - AI-powered git commit tool
+
+Usage: gclm [options]
+
+Options:
+  -h, --help      Show this help message
+  -v, --version   Show version
+  --verbose       Enable verbose output
+
+This tool analyzes staged git files and creates logical commits with AI-generated messages.
+Make sure to stage your files with 'git add' before running gclm.
+`);
+    return;
+  }
+
+  if (parsed.values.version) {
+    console.log("gclm version 1.0.0");
+    return;
+  }
+
   try {
-    console.log("🔍 Analyzing staged files...");
+    if (parsed.values.verbose) {
+      console.log("🔍 Analyzing staged files...");
+    }
     const stagedFiles = await getGitStagedFiles();
     
     if (stagedFiles.length === 0) {
@@ -397,19 +443,27 @@ async function main() {
       return;
     }
     
-    console.log(`📁 Found ${stagedFiles.length} staged files`);
+    if (parsed.values.verbose) {
+      console.log(`📁 Found ${stagedFiles.length} staged files`);
+    }
     
     if (stagedFiles.length === 1) {
-      console.log("📝 Single file found, creating single commit...");
+      if (parsed.values.verbose) {
+        console.log("📝 Single file found, creating single commit...");
+      }
       const title = await generateCommitTitle(stagedFiles);
       await createCommit(stagedFiles, title);
       console.log("\n🎉 Commit created!");
       return;
     }
     
-    console.log("🧠 Using AI to group files into logical commits...");
+    if (parsed.values.verbose) {
+      console.log("🧠 Using AI to group files into logical commits...");
+    }
     const groups = await groupFilesByLLM(stagedFiles);
-    console.log(`📦 AI suggested ${groups.length} logical commits`);
+    if (parsed.values.verbose) {
+      console.log(`📦 AI suggested ${groups.length} logical commits`);
+    }
     
     for (let i = 0; i < groups.length; i++) {
       await processCommitGroup(groups[i], i, groups.length);
@@ -426,7 +480,7 @@ async function main() {
 Deno.test("JSONレスポンスからファイルグループを抽出する", () => {
   const messages = [
     { type: 'result', result: '[["file1.ts", "file2.ts"], ["config.json"]]' }
-  ] as any;
+  ] as SDKMessage[];
   
   const result = extractGroupPathsFromMessages(messages);
   const expected = [["file1.ts", "file2.ts"], ["config.json"]];
