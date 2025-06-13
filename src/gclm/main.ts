@@ -131,6 +131,11 @@ function extractGroupPathsFromMessages(messages: SDKMessage[]): string[][] | nul
     try {
       if (message.type === 'result' && 'result' in message && message.result) {
         const groupsText = String(message.result).trim();
+        // Try to extract JSON from the text if it contains extra content
+        const jsonMatch = groupsText.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0]);
+        }
         return JSON.parse(groupsText);
       }
       
@@ -138,12 +143,17 @@ function extractGroupPathsFromMessages(messages: SDKMessage[]): string[][] | nul
         for (const content of message.message.content) {
           if (content.type === 'text' && content.text) {
             const groupsText = String(content.text).trim();
+            // Try to extract JSON from the text if it contains extra content
+            const jsonMatch = groupsText.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+              return JSON.parse(jsonMatch[0]);
+            }
             return JSON.parse(groupsText);
           }
         }
       }
     } catch (parseError) {
-      console.warn(`Failed to parse message ${i}:`, parseError);
+      // Don't log parse errors to reduce noise
       continue;
     }
   }
@@ -260,13 +270,19 @@ function extractTitleFromMessages(messages: SDKMessage[]): string | null {
     const message = messages[i];
     
     if (message.type === 'result' && 'result' in message && message.result) {
-      return String(message.result).trim();
+      const title = String(message.result).trim();
+      // Extract only the commit title, remove any extra explanatory text
+      const lines = title.split('\n');
+      return lines[0].trim();
     }
     
     if (message.type === 'assistant' && 'message' in message && message.message?.content) {
       for (const content of message.message.content) {
         if (content.type === 'text' && content.text) {
-          return String(content.text).trim();
+          const title = String(content.text).trim();
+          // Extract only the commit title, remove any extra explanatory text
+          const lines = title.split('\n');
+          return lines[0].trim();
         }
       }
     }
