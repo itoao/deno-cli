@@ -381,6 +381,14 @@ async function main() {
     
     console.log(`📁 Found ${stagedFiles.length} staged files`);
     
+    if (stagedFiles.length === 1) {
+      console.log("📝 Single file found, creating single commit...");
+      const title = await generateCommitTitle(stagedFiles);
+      await createCommit(stagedFiles, title);
+      console.log("\n🎉 Commit created!");
+      return;
+    }
+    
     console.log("🧠 Using AI to group files into logical commits...");
     const groups = await groupFilesByLLM(stagedFiles);
     console.log(`📦 AI suggested ${groups.length} logical commits`);
