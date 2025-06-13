@@ -1,4 +1,4 @@
-import { query, type SDKMessage } from "@anthropic-ai/claude-code";
+import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code";
 
 interface GitFileChange {
   path: string;
