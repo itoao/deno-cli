@@ -179,8 +179,14 @@ Rules:
 - Be specific about what changed
 - Max 50 characters
 - No quotes
+- IMPORTANT: Return ONLY the commit title, no explanations or additional text
 
-Return only the title.`;
+Example output:
+feat: add user authentication
+fix: resolve memory leak in parser
+chore: update dependencies
+
+Return only the title:`;
 
   try {
     const messages: SDKMessage[] = [];
