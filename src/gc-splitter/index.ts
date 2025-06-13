@@ -154,7 +154,7 @@ async function main() {
   try {
     console.log("🔍 Analyzing staged files...");
     const stagedFiles = await getGitStagedFiles();
-    
+
     if (stagedFiles.length === 0) {
       console.log("❌ No staged files found. Please stage files first with 'git add'.");
       return;
