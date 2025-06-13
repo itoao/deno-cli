@@ -120,6 +120,28 @@ Return ONLY the JSON array, no other text.`;
   }
 }
 
+/**
+ * AIから受信したメッセージ群からファイルパスのグループ化情報を抽出する関数
+ * 
+ * 処理内容:
+ * 1. メッセージを逆順で検索 - 最新のメッセージから順にチェック（最後の応答が最も重要）
+ * 2. メッセージタイプ別の処理
+ *    - message.type === 'result': 直接的な結果メッセージ
+ *    - message.type === 'assistant': アシスタントからの通常応答
+ * 3. JSON抽出とパース
+ *    - 正規表現で[...]形式のJSON配列を検索
+ *    - 余分なテキストがあってもJSON部分だけを抽出
+ * 
+ * 期待する返り値:
+ * [
+ *   ["file1.ts", "file2.ts"],    // グループ1
+ *   ["config.json"],             // グループ2
+ *   ["README.md"]                // グループ3
+ * ]
+ * 
+ * つまり、AIが「どのファイルを一緒にコミットすべきか」を判断した結果を、
+ * プログラムが使える配列形式に変換する処理
+ */
 function extractGroupPathsFromMessages(messages: SDKMessage[]): string[][] | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
@@ -400,6 +422,36 @@ async function main() {
     Deno.exit(1);
   }
 }
+
+Deno.test("JSONレスポンスからファイルグループを抽出する", () => {
+  const messages = [
+    { type: 'result', result: '[["file1.ts", "file2.ts"], ["config.json"]]' }
+  ] as any;
+  
+  const result = extractGroupPathsFromMessages(messages);
+  const expected = [["file1.ts", "file2.ts"], ["config.json"]];
+  
+  if (JSON.stringify(result) !== JSON.stringify(expected)) {
+    throw new Error(`Expected ${JSON.stringify(expected)}, got ${JSON.stringify(result)}`);
+  }
+});
+
+Deno.test("設定ファイルを正しく分類する", () => {
+  const files = [
+    { path: "package.json", status: "M", diff: "" },
+    { path: "config.toml", status: "A", diff: "" },  
+    { path: "src/main.ts", status: "M", diff: "" }
+  ] as GitFileChange[];
+  
+  const result = categorizeFiles(files);
+  
+  if (result.config.length !== 2) {
+    throw new Error(`Expected 2 config files, got ${result.config.length}`);
+  }
+  if (result.other.length !== 1) {
+    throw new Error(`Expected 1 other file, got ${result.other.length}`);
+  }
+});
 
 if (import.meta.main) {
   main();
