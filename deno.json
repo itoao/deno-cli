@@ -1,8 +1,6 @@
 {
-  "imports": {
-    "@anthropic-ai/claude-code": "npm:@anthropic-ai/claude-code@latest"
-  },
   "tasks": {
-    "run": "deno run --allow-net --allow-env --allow-read --allow-run src/gc-splitter/index.ts"
+    "run": "deno run --allow-net --allow-env --allow-read --allow-run --no-check src/gclm/index.ts",
+    "install": "deno install --allow-net --allow-env --allow-read --allow-run --no-check --force --name gclm ./src/gclm/index.ts"
   }
 }
