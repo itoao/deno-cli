@@ -6,10 +6,6 @@ interface GitFileChange {
   diff: string;
 }
 
-interface FileGroup {
-  files: GitFileChange[];
-  title?: string;
-}
 
 const MAX_DIFF_PREVIEW_LINES = 5;
 const MAX_COMMIT_TITLE_LENGTH = 50;
@@ -152,7 +148,7 @@ function extractGroupPathsFromMessages(messages: SDKMessage[]): string[][] | nul
           }
         }
       }
-    } catch (parseError) {
+    } catch {
       // Don't log parse errors to reduce noise
       continue;
     }
