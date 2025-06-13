@@ -3,6 +3,6 @@
     "@anthropic-ai/claude-code": "npm:@anthropic-ai/claude-code@latest"
   },
   "tasks": {
-    "run": "deno run --allow-net --allow-env=ANTHROPIC_API_KEY,BUN_INSTALL src/index.ts"
+    "run": "deno run --allow-net --allow-env --allow-read --allow-run src/index.ts"
   }
 }

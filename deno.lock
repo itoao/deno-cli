@@ -1,7 +1,8 @@
 {
   "version": "5",
   "specifiers": {
-    "npm:@anthropic-ai/claude-code@^1.0.22": "1.0.22"
+    "npm:@anthropic-ai/claude-code@^1.0.22": "1.0.22",
+    "npm:@anthropic-ai/claude-code@latest": "1.0.22"
   },
   "npm": {
     "@anthropic-ai/claude-code@1.0.22": {
