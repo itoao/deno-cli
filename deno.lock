@@ -1,6 +1,23 @@
 {
   "version": "5",
+  "specifiers": {
+    "npm:@anthropic-ai/claude-code@*": "1.0.22",
+    "npm:@anthropic-ai/claude-code@^1.0.22": "1.0.22"
+  },
   "npm": {
+    "@anthropic-ai/claude-code@1.0.22": {
+      "integrity": "sha512-vqfDHq4KNtUzUiwdsls8+2aTrC1Rn96iH+yOyCrBjHjJwojzU6pt3MOAMkJHMeErKeGqve+I7HM6mFw0OgZgqw==",
+      "optionalDependencies": [
+        "@img/sharp-darwin-arm64",
+        "@img/sharp-darwin-x64",
+        "@img/sharp-linux-arm",
+        "@img/sharp-linux-arm64",
+        "@img/sharp-linux-x64",
+        "@img/sharp-win32-x64"
+      ],
+      "scripts": true,
+      "bin": true
+    },
     "@img/sharp-darwin-arm64@0.33.5": {
       "integrity": "sha512-UT4p+iz/2H4twwAoLCqfA9UH5pI6DggwKEGuaPy7nCVQ8ZsiY5PIcrRvD1DzuY3qYL07NtIQcWnBSY/heikIFQ==",
       "optionalDependencies": [
