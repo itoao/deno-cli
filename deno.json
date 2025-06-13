@@ -7,7 +7,7 @@
   "tasks": {
     "run": "deno run --allow-net --allow-env --allow-read --allow-run src/gclm/main.ts",
     "install": "deno install -g --allow-net --allow-env --allow-read --allow-run --force -n gclm ./src/gclm/main.ts",
-    "test": "deno test --allow-all"
+    "test": "deno test --allow-all src/gclm/main.ts"
   },
   "compilerOptions": {
     "lib": ["deno.ns", "deno.unstable", "esnext", "dom"]
