@@ -4,6 +4,6 @@
   },
   "tasks": {
     "run": "deno run --allow-net --allow-env --allow-read --allow-run src/gclm/main.ts",
-    "install": "deno install -g --allow-net --allow-read --force -n gclm ./src/gclm/main.ts"
+    "install": "deno install -g --allow-net --allow-env --allow-read --allow-run --force -n gclm ./src/gclm/main.ts"
   }
 }
