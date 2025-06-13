@@ -2,63 +2,86 @@ import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code";
 
 interface GitFileChange {
   path: string;
-  status: string;
+  status: 'A' | 'M' | 'D' | 'R' | 'C' | 'U' | 'T';
   diff: string;
 }
 
-async function getGitStagedFiles(): Promise<GitFileChange[]> {
-  const statusProcess = new Deno.Command("git", {
-    args: ["diff", "--cached", "--name-status"],
+interface FileGroup {
+  files: GitFileChange[];
+  title?: string;
+}
+
+const MAX_DIFF_PREVIEW_LINES = 5;
+const MAX_COMMIT_TITLE_LENGTH = 50;
+const QUERY_OPTIONS = {
+  maxTurns: 2,
+} as const;
+
+async function executeGitCommand(args: string[]): Promise<string> {
+  const process = new Deno.Command("git", {
+    args,
     stdout: "piped",
     stderr: "piped",
   });
   
-  const statusResult = await statusProcess.output();
-  if (!statusResult.success) {
-    throw new Error("Failed to get git diff --cached");
+  const result = await process.output();
+  if (!result.success) {
+    const error = new TextDecoder().decode(result.stderr);
+    throw new Error(`Git command failed: ${args.join(' ')} - ${error}`);
   }
   
-  const statusOutput = new TextDecoder().decode(statusResult.stdout);
-  const stagedFiles: GitFileChange[] = [];
-  
-  for (const line of statusOutput.split('\n').filter(l => l.trim())) {
-    const parts = line.split('\t');
-    if (parts.length >= 2) {
-      const status = parts[0];
+  return new TextDecoder().decode(result.stdout);
+}
+
+async function getGitStagedFiles(): Promise<GitFileChange[]> {
+  try {
+    const statusOutput = await executeGitCommand(["diff", "--cached", "--name-status"]);
+    const statusLines = statusOutput.split('\n').filter(l => l.trim());
+    
+    if (statusLines.length === 0) {
+      return [];
+    }
+    
+    const filePromises = statusLines.map(async (line) => {
+      const parts = line.split('\t');
+      if (parts.length < 2) return null;
+      
+      const status = parts[0] as GitFileChange['status'];
       const path = parts[1];
       
-      const diffProcess = new Deno.Command("git", {
-        args: ["diff", "--cached", path],
-        stdout: "piped",
-        stderr: "piped",
-      });
-      
-      const diffResult = await diffProcess.output();
-      const diff = new TextDecoder().decode(diffResult.stdout);
-      
-      stagedFiles.push({
-        path,
-        status,
-        diff
-      });
-    }
+      try {
+        const diff = await executeGitCommand(["diff", "--cached", path]);
+        return { path, status, diff };
+      } catch (error) {
+        console.warn(`⚠️ Failed to get diff for ${path}:`, error);
+        return { path, status, diff: '' };
+      }
+    });
+    
+    const results = await Promise.all(filePromises);
+    return results.filter((file): file is GitFileChange => file !== null);
+  } catch (error) {
+    throw new Error(`Failed to get staged files: ${error instanceof Error ? error.message : String(error)}`);
   }
-  
-  return stagedFiles;
+}
+
+function createFilePreview(file: GitFileChange): string {
+  const diffLines = file.diff.split('\n');
+  const preview = diffLines.slice(0, MAX_DIFF_PREVIEW_LINES).join('\n');
+  return `- ${file.path} (${file.status})\n  Changes: ${preview}`;
 }
 
 async function groupFilesByLLM(files: GitFileChange[]): Promise<GitFileChange[][]> {
-  const fileList = files.map(f => ({
-    path: f.path,
-    status: f.status,
-    diffPreview: f.diff.split('\n').slice(0, 5).join('\n')
-  }));
+  if (files.length === 0) {
+    return [];
+  }
+  
+  const fileList = files.map(createFilePreview).join('\n\n');
   
   const prompt = `Analyze these staged git files and group them into logical commits. Each group should be a cohesive set of changes.
 
 Files:
-${fileList.map(f => `- ${f.path} (${f.status})
-  Changes: ${f.diffPreview}`).join('\n\n')}
+${fileList}
 
 Rules:
 - Group related functionality together
@@ -79,54 +102,63 @@ Return ONLY the JSON array, no other text.`;
 
   try {
     const messages: SDKMessage[] = [];
+    const abortController = new AbortController();
     
     for await (const message of query({
       prompt,
-      abortController: new AbortController(),
-      options: {
-        maxTurns: 2,
-      },
+      abortController,
+      options: QUERY_OPTIONS,
     })) {
       messages.push(message);
     }
     
-    // Try to find result in various message formats
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const message = messages[i];
-      
-      // Check result type
-      if (message.type === 'result' && 'result' in message && message.result) {
-        const groupsText = String(message.result).trim();
-        const groupPaths: string[][] = JSON.parse(groupsText);
-        return convertPathsToFileGroups(groupPaths, files);
-      }
-      
-      // Check assistant message
-      if (message.type === 'assistant' && 'message' in message && message.message?.content) {
-        for (const content of message.message.content) {
-          if (content.type === 'text' && content.text) {
-            const groupsText = String(content.text).trim();
-            const groupPaths: string[][] = JSON.parse(groupsText);
-            return convertPathsToFileGroups(groupPaths, files);
-          }
-        }
-      }
+    const groupPaths = extractGroupPathsFromMessages(messages);
+    if (!groupPaths) {
+      throw new Error("No valid response found in messages");
     }
     
-    throw new Error("No valid response found");
-  } catch (_error) {
-    console.warn("⚠️ LLM grouping failed, using simple fallback");
+    return convertPathsToFileGroups(groupPaths, files);
+  } catch (error) {
+    console.warn("⚠️ LLM grouping failed, using simple fallback:", error instanceof Error ? error.message : String(error));
     return fallbackGrouping(files);
   }
 }
 
+function extractGroupPathsFromMessages(messages: SDKMessage[]): string[][] | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    
+    try {
+      if (message.type === 'result' && 'result' in message && message.result) {
+        const groupsText = String(message.result).trim();
+        return JSON.parse(groupsText);
+      }
+      
+      if (message.type === 'assistant' && 'message' in message && message.message?.content) {
+        for (const content of message.message.content) {
+          if (content.type === 'text' && content.text) {
+            const groupsText = String(content.text).trim();
+            return JSON.parse(groupsText);
+          }
+        }
+      }
+    } catch (parseError) {
+      console.warn(`Failed to parse message ${i}:`, parseError);
+      continue;
+    }
+  }
+  
+  return null;
+}
+
 function convertPathsToFileGroups(groupPaths: string[][], files: GitFileChange[]): GitFileChange[][] {
+  const fileMap = new Map(files.map(f => [f.path, f]));
   const groups: GitFileChange[][] = [];
   
   for (const pathGroup of groupPaths) {
     const group: GitFileChange[] = [];
     for (const path of pathGroup) {
-      const file = files.find(f => f.path === path);
+      const file = fileMap.get(path);
       if (file) {
         group.push(file);
       }
@@ -136,7 +168,6 @@ function convertPathsToFileGroups(groupPaths: string[][], files: GitFileChange[]
     }
   }
   
-  // Add any files that weren't included in the LLM response
   const groupedPaths = new Set(groupPaths.flat());
   const ungroupedFiles = files.filter(f => !groupedPaths.has(f.path));
   if (ungroupedFiles.length > 0) {
@@ -146,27 +177,62 @@ function convertPathsToFileGroups(groupPaths: string[][], files: GitFileChange[]
   return groups;
 }
 
-function fallbackGrouping(files: GitFileChange[]): GitFileChange[][] {
-  // Simple fallback: group by file type
-  const configFiles = files.filter(f => f.path.endsWith('.json') || f.path.includes('config'));
-  const testFiles = files.filter(f => f.path.includes('test') || f.path.includes('spec'));
-  const docFiles = files.filter(f => f.path.endsWith('.md'));
-  const otherFiles = files.filter(f => !configFiles.includes(f) && !testFiles.includes(f) && !docFiles.includes(f));
+const FILE_TYPE_PATTERNS = {
+  config: (path: string) => path.endsWith('.json') || path.includes('config') || path.endsWith('.toml') || path.endsWith('.yaml') || path.endsWith('.yml'),
+  test: (path: string) => path.includes('test') || path.includes('spec') || path.endsWith('.test.ts') || path.endsWith('.spec.ts'),
+  docs: (path: string) => path.endsWith('.md') || path.endsWith('.rst') || path.includes('docs/'),
+  build: (path: string) => path.includes('build') || path.includes('dist') || path.endsWith('.lock'),
+} as const;
+
+function categorizeFiles(files: GitFileChange[]) {
+  const categories = {
+    config: [] as GitFileChange[],
+    test: [] as GitFileChange[],
+    docs: [] as GitFileChange[],
+    build: [] as GitFileChange[],
+    other: [] as GitFileChange[],
+  };
   
-  const groups: GitFileChange[][] = [];
-  if (configFiles.length > 0) groups.push(configFiles);
-  if (docFiles.length > 0) groups.push(docFiles);
-  if (otherFiles.length > 0) groups.push(otherFiles);
-  if (testFiles.length > 0) groups.push(testFiles);
+  for (const file of files) {
+    let categorized = false;
+    
+    for (const [category, matcher] of Object.entries(FILE_TYPE_PATTERNS)) {
+      if (matcher(file.path)) {
+        categories[category as keyof typeof categories].push(file);
+        categorized = true;
+        break;
+      }
+    }
+    
+    if (!categorized) {
+      categories.other.push(file);
+    }
+  }
   
-  return groups;
+  return categories;
 }
 
-async function generateCommitTitle(files: GitFileChange[]): Promise<string> {
-  const fileList = files.map(f => `${f.path} (${f.status})`).join('\n');
-  const diffSample = files.map(f => f.diff.split('\n').slice(0, 10).join('\n')).join('\n---\n');
+function fallbackGrouping(files: GitFileChange[]): GitFileChange[][] {
+  const categories = categorizeFiles(files);
+  const groups: GitFileChange[][] = [];
   
-  const prompt = `Generate a concise commit title for these changes:
+  const order = ['config', 'docs', 'other', 'test', 'build'] as const;
+  for (const category of order) {
+    if (categories[category].length > 0) {
+      groups.push(categories[category]);
+    }
+  }
+  
+  return groups.length > 0 ? groups : [files];
+}
+
+function createCommitPrompt(files: GitFileChange[]): string {
+  const fileList = files.map(f => `${f.path} (${f.status})`).join('\n');
+  const diffSample = files
+    .map(f => f.diff.split('\n').slice(0, 10).join('\n'))
+    .join('\n---\n');
+  
+  return `Generate a concise commit title for these changes:
 
 Files:
 ${fileList}
@@ -177,7 +243,7 @@ ${diffSample}
 Rules:
 - Use conventional commit format (feat:, fix:, docs:, refactor:, test:, config:, chore:)
 - Be specific about what changed
-- Max 50 characters
+- Max ${MAX_COMMIT_TITLE_LENGTH} characters
 - No quotes
 - IMPORTANT: Return ONLY the commit title, no explanations or additional text
 
@@ -187,105 +253,104 @@ fix: resolve memory leak in parser
 chore: update dependencies
 
 Return only the title:`;
+}
+
+function extractTitleFromMessages(messages: SDKMessage[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    
+    if (message.type === 'result' && 'result' in message && message.result) {
+      return String(message.result).trim();
+    }
+    
+    if (message.type === 'assistant' && 'message' in message && message.message?.content) {
+      for (const content of message.message.content) {
+        if (content.type === 'text' && content.text) {
+          return String(content.text).trim();
+        }
+      }
+    }
+  }
+  
+  return null;
+}
+
+function generateFallbackTitle(files: GitFileChange[]): string {
+  const categories = categorizeFiles(files);
+  
+  if (categories.test.length > 0) return "test: update tests";
+  if (categories.docs.length > 0) return "docs: update documentation";
+  if (categories.config.length > 0) return "config: update configuration";
+  if (categories.build.length > 0) return "build: update build files";
+  if (files.some(f => f.status === 'A')) return "feat: add new files";
+  if (files.some(f => f.status === 'D')) return "chore: remove files";
+  return "refactor: update code";
+}
+
+async function generateCommitTitle(files: GitFileChange[]): Promise<string> {
+  const prompt = createCommitPrompt(files);
 
   try {
     const messages: SDKMessage[] = [];
+    const abortController = new AbortController();
     
     for await (const message of query({
       prompt,
-      abortController: new AbortController(),
-      options: {
-        maxTurns: 2,
-      },
+      abortController,
+      options: QUERY_OPTIONS,
     })) {
       messages.push(message);
     }
     
-    // Try to find result in various message formats
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const message = messages[i];
-      
-      // Check result type
-      if (message.type === 'result' && 'result' in message && message.result) {
-        return String(message.result).trim();
-      }
-      
-      // Check assistant message
-      if (message.type === 'assistant' && 'message' in message && message.message?.content) {
-        for (const content of message.message.content) {
-          if (content.type === 'text' && content.text) {
-            return String(content.text).trim();
-          }
-        }
-      }
+    const title = extractTitleFromMessages(messages);
+    if (!title) {
+      throw new Error("No valid title found in messages");
     }
     
-    throw new Error("No valid response found");
-  } catch (_error) {
-    console.warn("⚠️ Failed to generate title, using fallback");
-    
-    // Simple fallback based on file types
-    const paths = files.map(f => f.path);
-    if (paths.some(p => p.includes('test'))) return "test: update tests";
-    if (paths.some(p => p.endsWith('.md'))) return "docs: update documentation";
-    if (paths.some(p => p.endsWith('.json'))) return "config: update configuration";
-    if (files.some(f => f.status === 'A')) return "feat: add new files";
-    if (files.some(f => f.status === 'D')) return "chore: remove files";
-    return "refactor: update code";
+    return title.length > MAX_COMMIT_TITLE_LENGTH 
+      ? title.substring(0, MAX_COMMIT_TITLE_LENGTH - 3) + '...'
+      : title;
+  } catch (error) {
+    console.warn("⚠️ Failed to generate title, using fallback:", error instanceof Error ? error.message : String(error));
+    return generateFallbackTitle(files);
+  }
+}
+
+async function hasChangesToCommit(): Promise<boolean> {
+  try {
+    await executeGitCommand(["diff", "--cached", "--quiet"]);
+    return false;
+  } catch {
+    return true;
   }
 }
 
 async function createCommit(files: GitFileChange[], title: string): Promise<void> {
   const filePaths = files.map(f => f.path);
   
-  // Reset staging area
-  const resetProcess = new Deno.Command("git", {
-    args: ["reset"],
-    stdout: "piped",
-    stderr: "piped",
-  });
-  await resetProcess.output();
-  
-  // Add only files for this commit
-  const addProcess = new Deno.Command("git", {
-    args: ["add", ...filePaths],
-    stdout: "piped",
-    stderr: "piped",
-  });
-  
-  const addResult = await addProcess.output();
-  if (!addResult.success) {
-    const error = new TextDecoder().decode(addResult.stderr);
-    throw new Error(`Failed to add files: ${error}`);
+  try {
+    await executeGitCommand(["reset"]);
+    await executeGitCommand(["add", ...filePaths]);
+    
+    const hasChanges = await hasChangesToCommit();
+    if (!hasChanges) {
+      console.log(`⚠️ No changes to commit for: ${filePaths.join(', ')}`);
+      return;
+    }
+    
+    await executeGitCommand(["commit", "-m", title]);
+    console.log(`✅ ${title}`);
+  } catch (error) {
+    throw new Error(`Failed to create commit: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+async function processCommitGroup(group: GitFileChange[], index: number, total: number): Promise<void> {
+  console.log(`\n📝 Commit ${index + 1}/${total}:`);
+  console.log(`   Files: ${group.map(f => f.path).join(', ')}`);
   
-  // Check if there are changes to commit
-  const statusProcess = new Deno.Command("git", {
-    args: ["diff", "--cached", "--quiet"],
-    stdout: "piped",
-    stderr: "piped",
-  });
-  
-  const statusResult = await statusProcess.output();
-  if (statusResult.success) {
-    console.log(`⚠️ No changes to commit for: ${filePaths.join(', ')}`);
-    return;
-  }
-  
-  // Create commit
-  const commitProcess = new Deno.Command("git", {
-    args: ["commit", "-m", title],
-    stdout: "piped",
-    stderr: "piped",
-  });
-  
-  const commitResult = await commitProcess.output();
-  if (!commitResult.success) {
-    const error = new TextDecoder().decode(commitResult.stderr);
-    throw new Error(`Failed to commit: ${error}`);
-  }
-  
-  console.log(`✅ ${title}`);
+  const title = await generateCommitTitle(group);
+  await createCommit(group, title);
 }
 
 async function main() {
@@ -305,13 +370,7 @@ async function main() {
     console.log(`📦 AI suggested ${groups.length} logical commits`);
     
     for (let i = 0; i < groups.length; i++) {
-      const group = groups[i];
-      console.log(`\n📝 Commit ${i + 1}/${groups.length}:`);
-      console.log(`   Files: ${group.map(f => f.path).join(', ')}`);
-      
-      const title = await generateCommitTitle(group);
-      
-      await createCommit(group, title);
+      await processCommitGroup(groups[i], i, groups.length);
     }
     
     console.log("\n🎉 All commits created!");
