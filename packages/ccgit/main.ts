@@ -266,9 +266,10 @@ async function handleClaudeSession(args: string[]): Promise<void> {
     // Run Claude with real-time monitoring
     console.log("🚀 Starting Claude session with auto-commit...");
     
-    // Check if this is truly interactive mode (no args or only flags)
-    const hasPromptArg = args.some(arg => !arg.startsWith('-'));
-    const isInteractiveMode = args.length === 0 || !hasPromptArg;
+    // Check if this is truly interactive mode
+    // For Claude CLI: only no arguments = interactive mode
+    // All other cases (including flags only) are non-interactive
+    const isInteractiveMode = args.length === 0;
     
     if (isInteractiveMode) {
       // Run interactive mode with monitoring
@@ -357,8 +358,7 @@ Examples:
   const claudeArgs = args;
   
   // Handle interactive mode
-  const hasPromptArg = claudeArgs.some(arg => !arg.startsWith('-'));
-  if (claudeArgs.length === 0 || !hasPromptArg) {
+  if (claudeArgs.length === 0) {
     console.log(`🚀 Starting Claude interactive session with auto-commit...`);
     console.log(`🎯 Interactive mode with auto-commit enabled`);
   }
