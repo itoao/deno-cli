@@ -197,8 +197,11 @@ Examples:
     return;
   }
   
+  // Filter out ccgit-specific flags before passing to Claude
+  const claudeArgs = args.filter(arg => arg !== '--dangerously-skip-permissions');
+  
   // Pass through to Claude with git tracking
-  await handleClaudeSession(args);
+  await handleClaudeSession(claudeArgs);
 }
 
 if (import.meta.main) {
