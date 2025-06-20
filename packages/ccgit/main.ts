@@ -290,7 +290,19 @@ async function handleClaudeSession(args: string[]): Promise<void> {
         console.log(`   Or press Shift+Tab to toggle auto-accept mode`);
         console.log(``);
       }
-      await runInteractiveClaudeWithMonitoring([]);
+      // For interactive mode with no args, use $`claude` directly to avoid --print issues
+      if (args.length === 0) {
+        try {
+          await $`claude`.spawn();
+        } catch (error) {
+          console.error(`❌ Claude CLI execution failed: ${error}`);
+          console.log(`ℹ️  Try running 'claude doctor' to diagnose Claude CLI issues`);
+          console.log(`ℹ️  Or run 'claude' directly to test Claude CLI`);
+          Deno.exit(1);
+        }
+      } else {
+        await runInteractiveClaudeWithMonitoring([]);
+      }
     } else {
       // Run single command mode with monitoring
       const output = await runClaudeWithMonitoring(claudeArgs);
