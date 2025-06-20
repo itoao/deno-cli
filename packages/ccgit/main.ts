@@ -169,7 +169,7 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
 async function runInteractiveClaudeWithMonitoring(args: string[]): Promise<void> {
   try {
     const cmd = new Deno.Command("claude", {
-      args: args,
+      args: args.length === 0 ? undefined : args,
       stdout: "piped",
       stderr: "piped", 
       stdin: "inherit",
