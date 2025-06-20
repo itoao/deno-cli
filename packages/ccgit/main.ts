@@ -106,7 +106,7 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
       args: args,
       stdout: "piped",
       stderr: "piped",
-      stdin: "inherit",
+      stdin: "inherit", // Always inherit stdin for interactive support
     });
     
     const process = cmd.spawn();
@@ -276,7 +276,6 @@ async function handleClaudeSession(args: string[]): Promise<void> {
   try {
     // Run Claude with real-time monitoring
     console.log("🚀 Starting Claude session with auto-commit...");
-    
     // Check if this is truly interactive mode
     // For Claude CLI: only no arguments = interactive mode
     // All other cases (including flags only) are non-interactive
@@ -382,7 +381,6 @@ Examples:
 `);
     return;
   }
-  
   // Handle interactive mode  
   if (args.length === 0) {
     console.log(`🚀 Starting Claude interactive session with auto-commit...`);
