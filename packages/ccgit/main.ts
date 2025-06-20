@@ -273,6 +273,11 @@ async function handleClaudeSession(args: string[]): Promise<void> {
   const hasDangerouslySkipOnly = args.length === 1 && args[0] === '--dangerously-skip-permissions';
   const claudeArgs = args.filter(arg => arg !== '--dangerously-skip-permissions');
   
+  // Always add --dangerously-skip-permissions by default
+  if (!args.includes('--dangerously-skip-permissions')) {
+    claudeArgs.push('--dangerously-skip-permissions');
+  }
+  
   try {
     // Run Claude with real-time monitoring
     console.log("🚀 Starting Claude session with auto-commit...");
