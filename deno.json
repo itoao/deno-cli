@@ -1,13 +1,15 @@
 {
+  "workspace": ["./packages/*"],
   "imports": {
     "@anthropic-ai/claude-code": "npm:@anthropic-ai/claude-code",
     "vitest": "npm:vitest",
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },
   "tasks": {
-    "run": "deno run --allow-net --allow-env --allow-read --allow-run src/gclm/main.ts",
-    "install": "deno install -g --allow-net --allow-env --allow-read --allow-run --force -n gclm ./src/gclm/main.ts",
-    "test": "deno test --allow-all src/gclm/main.ts"
+    "test:all": "deno test",
+    "gclm": "deno task --filter \"@deno-cli/gclm\" run",
+    "gclm:test": "deno task --filter \"@deno-cli/gclm\" test",
+    "gclm:install": "deno task --filter \"@deno-cli/gclm\" install"
   },
   "compilerOptions": {
     "lib": ["deno.ns", "deno.unstable", "esnext", "dom"]
