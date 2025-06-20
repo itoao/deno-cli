@@ -199,6 +199,9 @@ async function handleClaudeSession(args: string[]): Promise<void> {
     claudeArgs.push('--dangerously-skip-permissions');
   }
   
+  // Debug logging
+  console.log(`🔍 Debug: isInteractiveMode=${isInteractiveMode}, claudeArgs=${JSON.stringify(claudeArgs)}`);
+  
   try {
     // Run Claude with real-time monitoring
     console.log("🚀 Starting Claude session with auto-commit...");
@@ -253,6 +256,7 @@ async function handleClaudeSession(args: string[]): Promise<void> {
         console.error(`❌ Claude CLI execution failed: ${error}`);
         console.log(`ℹ️  Try running 'claude doctor' to diagnose Claude CLI issues`);
         console.log(`ℹ️  Or run 'claude' directly to test Claude CLI`);
+        console.log(`ℹ️  Args passed to claude: ${JSON.stringify(claudeArgs)}`);
         Deno.exit(1);
       }
     } else {
