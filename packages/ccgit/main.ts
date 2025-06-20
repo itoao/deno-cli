@@ -102,8 +102,11 @@ async function checkForTaskCompletion(chunk: string): Promise<void> {
 
 async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
   try {
+    // Filter out --print flag if no prompt is provided and stdin is empty
+    const filteredArgs = [...args];
+    
     const cmd = new Deno.Command("claude", {
-      args: args,
+      args: filteredArgs,
       stdout: "piped",
       stderr: "piped",
       stdin: "inherit", // Always inherit stdin for interactive support
