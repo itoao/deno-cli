@@ -66,9 +66,10 @@ Claude CLIの実行と同時にGitでコード変更を自動管理するツー�
 - ccgit start（ブランチ管理）
 - ccgit list（セッション一覧表示）
 
-### 🔄 未実装
-- --squashオプション（セッション終了時の履歴集約）
-- 詳細なテストとドキュメント
+### 🔄 TODO
+- --squashオプション（セッション終了時の履歴集約）を実装
+- 詳細なテストを追加  
+- 詳細なドキュメントを追加
 
 ## 使用例
 
@@ -131,3 +132,38 @@ packages/ccgit/
 - 標準出力/エラー出力をパイプして解析
 - git操作は `jsr:@david/dax` を使用
 - セッションIDは一意性を保つためUUID v4形式を想定
+
+## 抱えている不具合
+### ccgit checkoutできない
+ログ：
+$ deno task ccgit list                                                                                       19:00
+Task ccgit deno task --filter "@deno-cli/ccgit" run "list"
+Task run deno run --allow-net --allow-env --allow-read --allow-run main.ts "list"
+Recent Claude sessions:
+────────────────────────────────────────────────────────────
+ef2a111 mc4lde59-xk6j5       6/20/2025, 6:12:39 PM
+0cf5396 mc4n18yf-im36n       6/20/2025, 6:59:12 PM
+
+ログ：
+$ deno task ccgit checkout 0cf5396                                                                           18:59
+Task ccgit deno task --filter "@deno-cli/ccgit" run "checkout" "0cf5396"
+Task run deno run --allow-net --allow-env --allow-read --allow-run main.ts "checkout" "0cf5396"
+❌ No commits found for session ID: 0cf5396
+
+期待する挙動
+ccgit checkoutできる
+### ccgit --dangerously-skip-permissionsできない
+ログ：
+$ deno task ccgit --dangerously-skip-permissions                                                             18:59
+Task ccgit deno task --filter "@deno-cli/ccgit" run "--dangerously-skip-permissions"
+Task run deno run --allow-net --allow-env --allow-read --allow-run main.ts "--dangerously-skip-permissions"
+🚀 Starting Claude session with auto-commit...
+🎯 Interactive mode with auto-commit enabled
+Error: Input must be provided either through stdin or as a prompt argument when using --print
+
+期待する挙動
+ccgit --dangerously-skip-permissionsできる
+
+## commit titleがAIに書いてもらえてない
+期待する挙動
+commit titleがAIに書いてもらう
