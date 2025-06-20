@@ -188,9 +188,11 @@ async function handleClaudeSession(args: string[]): Promise<void> {
   // Interactive mode: no args or only --dangerously-skip-permissions
   const isInteractiveMode = !hasOtherArgs;
   
-  // Prepare claude args: always include --dangerously-skip-permissions by default  
+  // Prepare claude args: only add --dangerously-skip-permissions for non-interactive mode
   const claudeArgs = [...args];
-  if (!claudeArgs.includes('--dangerously-skip-permissions')) {
+  
+  // For non-interactive mode (single command), add --dangerously-skip-permissions if not present
+  if (!isInteractiveMode && !claudeArgs.includes('--dangerously-skip-permissions')) {
     claudeArgs.push('--dangerously-skip-permissions');
   }
   
