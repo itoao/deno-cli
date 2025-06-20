@@ -105,9 +105,11 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
     // Filter out --print flag if no prompt is provided and stdin is empty
     const filteredArgs = [...args];
     
-    // Clear CLAUDECODE environment variable to prevent automatic --print mode
+    // Clear Claude Code specific environment variables to prevent automatic --print mode
     const env = { ...Deno.env.toObject() };
     delete env.CLAUDECODE;
+    delete env.CLAUDE_CODE_SSE_PORT;
+    delete env.CLAUDE_CODE_ENTRYPOINT;
     
     const cmd = new Deno.Command("claude", {
       args: filteredArgs,
@@ -181,9 +183,11 @@ async function handleClaudeSession(args: string[]): Promise<void> {
     await git.getGitRoot();
   } catch {
     // Not a git repo, just run claude normally
-    // Clear CLAUDECODE environment variable to prevent automatic --print mode
+    // Clear Claude Code specific environment variables to prevent automatic --print mode
     const env = { ...Deno.env.toObject() };
     delete env.CLAUDECODE;
+    delete env.CLAUDE_CODE_SSE_PORT;
+    delete env.CLAUDE_CODE_ENTRYPOINT;
     
     if (args.length === 0) {
       await $`claude`.env(env).spawn();
