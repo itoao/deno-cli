@@ -37,12 +37,17 @@ Claude CLIの実行と同時にGitでコード変更を自動管理するツー�
 ### 3. Git自動化エンジン (git.ts)
 - コミットメッセージフォーマット:
   ```
-  feat: Claude chat
+  feat: <自動生成されたタイトル>
   
   Session-ID: abc123
   Prompt: "ユーザープロンプト …"
   Time: 2025-06-20T17:12:52+09:00
   ```
+- コミットタイトルは以下の方法で自動生成:
+  - gclmのコードを一部流用（コピー＆改修）
+    - generateCommitTitle関数とその依存関係を抽出
+    - ccgit用にカスタマイズ（プロンプト情報も考慮）
+  - デフォルト: "feat: Claude chat session"
 - git trailers形式で後から検索可能
 
 ### 4. 履歴管理機能 (history.ts)
