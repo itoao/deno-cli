@@ -1,5 +1,8 @@
 {
   "name": "@deno-cli/ccgit",
   "version": "0.1.0",
-  "exports": "./main.ts"
+  "exports": "./main.ts",
+  "tasks": {
+    "run": "deno run --allow-net --allow-env --allow-read --allow-run main.ts"
+  }
 }
