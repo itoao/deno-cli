@@ -278,7 +278,10 @@ async function handleClaudeSession(args: string[]): Promise<void> {
     if (isInteractiveMode) {
       // Run interactive mode with monitoring
       if (hasDangerouslySkipOnly) {
-        console.log(`⚠️  --dangerously-skip-permissions enabled for this session`);
+        console.log(`⚠️  To enable --dangerously-skip-permissions in interactive mode:`);
+        console.log(`   Type: /mode --dangerously-skip-permissions`);
+        console.log(`   Or press Shift+Tab to toggle auto-accept mode`);
+        console.log(``);
       }
       await runInteractiveClaudeWithMonitoring(claudeArgs);
     } else {

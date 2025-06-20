@@ -99,6 +99,9 @@ export async function getCommitsBySessionId(sessionId: string): Promise<string[]
 
 export async function checkoutCommit(commitHash: string): Promise<void> {
   try {
+    // First verify the commit exists
+    await $`git rev-parse --verify ${commitHash}`.quiet();
+    // Then checkout
     await $`git checkout ${commitHash}`.quiet();
   } catch (error) {
     throw new Error(`Failed to checkout commit: ${error}`);

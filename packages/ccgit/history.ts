@@ -7,12 +7,13 @@ export async function checkoutSession(sessionIdOrHash: string): Promise<void> {
     await git.checkoutCommit(sessionIdOrHash);
     console.log(`✅ Checked out commit: ${sessionIdOrHash}`);
     return;
-  } catch {
+  } catch (error) {
+    console.log(`Failed to checkout as commit hash: ${error}`);
     // If that fails, try as a session ID
     const commits = await git.getCommitsBySessionId(sessionIdOrHash);
     
     if (commits.length === 0) {
-      console.error(`❌ No commits found for session ID or hash: ${sessionIdOrHash}`);
+      console.error(`❌ No commits found for session ID: ${sessionIdOrHash}`);
       Deno.exit(1);
     }
     
