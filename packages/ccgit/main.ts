@@ -166,93 +166,6 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
   }
 }
 
-async function runInteractiveClaudeWithMonitoring(args: string[]): Promise<void> {
-  try {
-    const cmd = new Deno.Command("claude", {
-      args: args.length === 0 ? undefined : args,
-      stdout: "piped",
-      stderr: "piped", 
-      stdin: "inherit",
-    });
-    
-    const process = cmd.spawn();
-    
-    const decoder = new TextDecoder();
-    
-    // Monitor stdout for task completion patterns
-    const stdoutReader = process.stdout.getReader();
-    const stderrReader = process.stderr.getReader();
-    
-    // Read stdout chunks
-    const readStdout = async () => {
-      while (true) {
-        const { done, value } = await stdoutReader.read();
-        if (done) break;
-        
-        const chunk = decoder.decode(value);
-        Deno.stdout.write(value); // Pass through to terminal
-        
-        // Check for task completion indicators
-        await checkForTaskCompletion(chunk);
-      }
-    };
-    
-    // Read stderr chunks  
-    const readStderr = async () => {
-      while (true) {
-        const { done, value } = await stderrReader.read();
-        if (done) break;
-        
-        const chunk = decoder.decode(value);
-        Deno.stderr.write(value); // Pass through to terminal
-      }
-    };
-    
-    // Run both readers concurrently
-    await Promise.all([readStdout(), readStderr()]);
-    
-    const status = await process.status;
-    
-    // Final commit for any remaining changes in interactive mode
-    const hasChanges = await git.hasUncommittedChanges();
-    if (hasChanges) {
-      const sessionId = `interactive-session-${Date.now()}`;
-      const metadata = {
-        sessionId,
-        timestamp: new Date().toISOString(),
-        prompt: "Interactive session completion",
-        resumedFrom: undefined,
-      };
-      
-      const changedFiles = await git.getStagedFiles();
-      
-      // Convert to shared GitFileChange type and add diff information
-      const filesWithDiff: SharedGitFileChange[] = await Promise.all(
-        changedFiles.map(async (file) => {
-          let diff = '';
-          try {
-            if (file.status === 'A') {
-              diff = await git.getFileContent(file.path);
-            } else {
-              diff = await git.getFileDiff(file.path);
-            }
-          } catch {}
-          return { ...file, diff };
-        })
-      );
-      
-      const title = generateCommitTitleWithAI(filesWithDiff, metadata);
-      await git.commitChanges(title, metadata);
-      console.log(`\n✅ Final interactive session commit with ID: ${metadata.sessionId}`);
-    }
-    
-    // Exit with Claude's exit code
-    Deno.exit(status.code);
-  } catch (error) {
-    console.error('Error running interactive Claude session:', error);
-    Deno.exit(1);
-  }
-}
 
 async function handleClaudeSession(args: string[]): Promise<void> {
   // Check if we're in a git repo
@@ -268,23 +181,23 @@ async function handleClaudeSession(args: string[]): Promise<void> {
     return;
   }
   
-  // Filter out ccgit-specific handling of --dangerously-skip-permissions
-  // If user wants --dangerously-skip-permissions but no other args, start interactive mode
+  // Handle --dangerously-skip-permissions properly
   const hasDangerouslySkipOnly = args.length === 1 && args[0] === '--dangerously-skip-permissions';
-  const claudeArgs = args.filter(arg => arg !== '--dangerously-skip-permissions');
+  const hasOtherArgs = args.some(arg => arg !== '--dangerously-skip-permissions');
   
-  // Always add --dangerously-skip-permissions by default
-  if (!args.includes('--dangerously-skip-permissions')) {
+  // Interactive mode: no args or only --dangerously-skip-permissions
+  const isInteractiveMode = !hasOtherArgs;
+  
+  // Prepare claude args: always include --dangerously-skip-permissions by default  
+  const claudeArgs = [...args];
+  if (!claudeArgs.includes('--dangerously-skip-permissions')) {
     claudeArgs.push('--dangerously-skip-permissions');
   }
   
   try {
     // Run Claude with real-time monitoring
     console.log("🚀 Starting Claude session with auto-commit...");
-    // Check if this is truly interactive mode
-    // For Claude CLI: only no arguments = interactive mode
-    // All other cases (including flags only) are non-interactive
-    const isInteractiveMode = claudeArgs.length === 0;
+    // isInteractiveMode is already determined above
     
     if (isInteractiveMode) {
       // Run interactive mode with monitoring
@@ -294,18 +207,48 @@ async function handleClaudeSession(args: string[]): Promise<void> {
         console.log(`   Or press Shift+Tab to toggle auto-accept mode`);
         console.log(``);
       }
-      // For interactive mode with no args, use $`claude` directly to avoid --print issues
-      if (args.length === 0) {
-        try {
-          await $`claude`.spawn();
-        } catch (error) {
-          console.error(`❌ Claude CLI execution failed: ${error}`);
-          console.log(`ℹ️  Try running 'claude doctor' to diagnose Claude CLI issues`);
-          console.log(`ℹ️  Or run 'claude' directly to test Claude CLI`);
-          Deno.exit(1);
+      // For interactive mode, use monitoring instead of spawn
+      try {
+        const output = await runClaudeWithMonitoring(claudeArgs);
+        
+        // Final commit for any remaining changes
+        const hasChanges = await git.hasUncommittedChanges();
+        if (hasChanges) {
+          const metadata = {
+            sessionId: `interactive-session-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            prompt: "Interactive session completion",
+            resumedFrom: undefined,
+          };
+          const changedFiles = await git.getStagedFiles();
+          
+          // Convert to shared GitFileChange type and add diff information
+          const filesWithDiff: SharedGitFileChange[] = await Promise.all(
+            changedFiles.map(async (file) => {
+              let diff = '';
+              try {
+                if (file.status === 'A') {
+                  diff = await git.getFileContent(file.path);
+                } else {
+                  diff = await git.getFileDiff(file.path);
+                }
+              } catch {}
+              return { ...file, diff };
+            })
+          );
+          
+          const title = generateCommitTitleWithAI(filesWithDiff, metadata);
+          await git.commitChanges(title, metadata);
+          console.log(`\n✅ Final interactive session commit with ID: ${metadata.sessionId}`);
         }
-      } else {
-        await runInteractiveClaudeWithMonitoring([]);
+        
+        // Exit with Claude's exit code
+        Deno.exit(output.exitCode);
+      } catch (error) {
+        console.error(`❌ Claude CLI execution failed: ${error}`);
+        console.log(`ℹ️  Try running 'claude doctor' to diagnose Claude CLI issues`);
+        console.log(`ℹ️  Or run 'claude' directly to test Claude CLI`);
+        Deno.exit(1);
       }
     } else {
       // Run single command mode with monitoring
@@ -396,9 +339,8 @@ Examples:
     console.log(`⚠️  --dangerously-skip-permissions enabled for this session`);
   }
   
-  // Pass through to Claude with git tracking (filter out ccgit-specific flags)
-  const filteredArgs = args.filter(arg => arg !== '--dangerously-skip-permissions');
-  await handleClaudeSession(filteredArgs);
+  // Pass through to Claude with git tracking
+  await handleClaudeSession(args);
 }
 
 if (import.meta.main) {
