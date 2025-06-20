@@ -283,7 +283,7 @@ async function handleClaudeSession(args: string[]): Promise<void> {
         console.log(`   Or press Shift+Tab to toggle auto-accept mode`);
         console.log(``);
       }
-      await runInteractiveClaudeWithMonitoring(claudeArgs);
+      await runInteractiveClaudeWithMonitoring([]);
     } else {
       // Run single command mode with monitoring
       const output = await runClaudeWithMonitoring(args);
