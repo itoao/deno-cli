@@ -55,20 +55,20 @@ Claude CLIの実行と同時にGitでコード変更を自動管理するツー�
 - `ccgit start foo`: セッション別ブランチ作成 (claude/foo-<timestamp>)
 - `--squash`: セッション終了時に履歴をまとめる
 
-## 実装優先順位
+## 実装状況
 
-1. **高優先度**
-   - ccgit エントリーポイント実装
-   - git自動化（stash → claude実行 → commit）
-   - セッションID抽出とメタデータ埋め込み
+### ✅ 実装済み
+- ccgit エントリーポイント実装
+- リアルタイム出力監視とタスク完了検知
+- 自動commit（各タスク完了時）
+- セッションID抽出とメタデータ埋め込み
+- ccgit checkout（履歴復元）
+- ccgit start（ブランチ管理）
+- ccgit list（セッション一覧表示）
 
-2. **中優先度**
-   - ccgit checkout（履歴復元）
-   - ccgit start（ブランチ管理）
-
-3. **低優先度**
-   - --squashオプション
-   - 詳細なテストとドキュメント
+### 🔄 未実装
+- --squashオプション（セッション終了時の履歴集約）
+- 詳細なテストとドキュメント
 
 ## 使用例
 
@@ -89,20 +89,28 @@ ccgit start feature-auth
 
 ## 動作モード
 
-### 対話モード（デフォルト）
-- `ccgit` を実行すると、Claude CLIの対話モードが起動
-- ユーザーは複数の質問や指示を連続して実行可能
-- 各応答の後に自動的にgit add -A → commit
-- exitやCtrl+Cで終了
-
+### リアルタイム自動コミット
+- `ccgit` を実行すると、Claude CLIの出力をリアルタイムで監視
+- Claude Codeがタスクを完了するたびに**即座に自動commit**
+- ファイル変更、テスト実行、ビルド完了などを検知してcommit
+- 各commitには一意のtask-IDが付与される
 
 ### 実行フロー
 1. `ccgit` 実行
 2. 現在の変更をstash（または初回commit）
 3. Claude CLI起動（`claude` コマンド）
 4. 対話モード開始
-5. ユーザー入力 → Claude応答 → 自動commit（繰り返し）
-6. 終了時に最終commit
+5. **ユーザー入力 → Claude応答 → タスク完了検知 → 即座にcommit**（繰り返し）
+6. 終了時に最終commit（未コミットの変更があれば）
+
+### 自動コミットの検知パターン
+- "The file ... has been updated"
+- "File created successfully"  
+- "✅" （成功を示す絵文字）
+- "Command completed successfully"
+- "Test passed"
+- "Build successful"
+- "Successfully" を含む出力
 
 ## ディレクトリ構成
 
