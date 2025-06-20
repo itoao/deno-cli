@@ -374,8 +374,9 @@ Examples:
     console.log(`⚠️  --dangerously-skip-permissions enabled for this session`);
   }
   
-  // Pass through to Claude with git tracking
-  await handleClaudeSession(args);
+  // Pass through to Claude with git tracking (filter out ccgit-specific flags)
+  const filteredArgs = args.filter(arg => arg !== '--dangerously-skip-permissions');
+  await handleClaudeSession(filteredArgs);
 }
 
 if (import.meta.main) {
