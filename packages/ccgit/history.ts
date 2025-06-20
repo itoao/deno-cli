@@ -46,7 +46,8 @@ export async function listSessions(): Promise<void> {
     
     for (const commit of commits.slice(-10)) { // Show last 10 sessions
       const lines = commit.split('\n');
-      const [hash, , date] = lines[0].split('|');
+      const [hashDateLine] = lines;
+      const [hash, , date] = hashDateLine.split('|');
       const body = lines.slice(1).join('\n');
       const sessionIdMatch = body.match(/Session-ID: ([^\s\n]+)/);
       const sessionId = sessionIdMatch ? sessionIdMatch[1] : 'unknown';

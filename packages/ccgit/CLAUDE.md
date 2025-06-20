@@ -163,6 +163,7 @@ Error: Input must be provided either through stdin or as a prompt argument when 
 
 期待する挙動
 ccgit --dangerously-skip-permissionsできる
+対話モードでも--dangerously-skip-permissionsできる
 
 ## commit titleがAIに書いてもらえてない
 期待する挙動
