@@ -286,7 +286,7 @@ async function handleClaudeSession(args: string[]): Promise<void> {
       await runInteractiveClaudeWithMonitoring([]);
     } else {
       // Run single command mode with monitoring
-      const output = await runClaudeWithMonitoring(args);
+      const output = await runClaudeWithMonitoring(claudeArgs);
       
       // Final commit for any remaining changes
       const hasChanges = await git.hasUncommittedChanges();
