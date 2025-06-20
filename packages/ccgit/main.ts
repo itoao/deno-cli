@@ -2,7 +2,14 @@
 import { $ } from "jsr:@david/dax@0.40.0";
 import * as git from "./git.ts";
 import { parseClaudeOutput } from "./metadata.ts";
-import { generateCommitTitle as generateCommitTitleWithAI, type GitFileChange as SharedGitFileChange } from "@deno-cli/shared";
+// import { generateCommitTitle as generateCommitTitleWithAI, type GitFileChange as SharedGitFileChange } from "@deno-cli/shared";
+import { generateCommitTitle as generateCommitTitleWithAI } from "./title-generator.ts";
+
+type SharedGitFileChange = {
+  path: string;
+  status: 'A' | 'M' | 'D' | 'R' | 'C' | 'U' | 'T';
+  diff: string;
+};
 import { checkoutSession, startSession, listSessions } from "./history.ts";
 import type { ClaudeOutput } from "./types.ts";
 
@@ -80,7 +87,7 @@ async function checkForTaskCompletion(chunk: string): Promise<void> {
         })
       );
       
-      const title = await generateCommitTitleWithAI(filesWithDiff);
+      const title = generateCommitTitleWithAI(filesWithDiff, metadata);
       
       // Commit the changes
       await git.commitChanges(title, metadata);
@@ -234,7 +241,7 @@ async function runInteractiveClaudeWithMonitoring(args: string[]): Promise<void>
         })
       );
       
-      const title = await generateCommitTitleWithAI(filesWithDiff);
+      const title = generateCommitTitleWithAI(filesWithDiff, metadata);
       await git.commitChanges(title, metadata);
       console.log(`\n✅ Final interactive session commit with ID: ${metadata.sessionId}`);
     }
@@ -252,7 +259,7 @@ async function handleClaudeSession(args: string[]): Promise<void> {
   try {
     await git.getGitRoot();
   } catch {
-    // Not a git repo, just run claude normally  
+    // Not a git repo, just run claude normally
     if (args.length === 0) {
       await $`claude`.spawn();
     } else {
@@ -309,7 +316,7 @@ async function handleClaudeSession(args: string[]): Promise<void> {
           })
         );
         
-        const title = await generateCommitTitleWithAI(filesWithDiff);
+        const title = generateCommitTitleWithAI(filesWithDiff, metadata);
         await git.commitChanges(title, metadata);
         console.log(`\n✅ Final session commit with ID: ${metadata.sessionId}`);
       }
