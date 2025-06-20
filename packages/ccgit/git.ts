@@ -43,7 +43,7 @@ export async function popStash(): Promise<void> {
 
 export async function getStagedFiles(): Promise<GitFileChange[]> {
   try {
-    const statusOutput = await $`git diff --name-status`.text();
+    const statusOutput = await $`git diff --cached --name-status`.text();
     const statusLines = statusOutput.split('\n').filter(l => l.trim());
     
     return statusLines.map(line => {
@@ -63,10 +63,13 @@ export async function commitChanges(
     // Stage all changes
     await $`git add -A`.quiet();
     
-    // Check if there are changes to commit
-    const hasChanges = await hasUncommittedChanges();
-    if (!hasChanges) {
+    // Check if there are staged changes to commit
+    try {
+      await $`git diff --cached --quiet`.quiet();
+      // If no error, there are no staged changes
       return;
+    } catch {
+      // Error means there are staged changes, proceed with commit
     }
     
     // Build commit message with metadata
