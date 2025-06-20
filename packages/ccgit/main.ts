@@ -264,7 +264,7 @@ async function handleClaudeSession(args: string[]): Promise<void> {
   // Filter out ccgit-specific handling of --dangerously-skip-permissions
   // If user wants --dangerously-skip-permissions but no other args, start interactive mode
   const hasDangerouslySkipOnly = args.length === 1 && args[0] === '--dangerously-skip-permissions';
-  const claudeArgs = hasDangerouslySkipOnly ? [] : args;
+  const claudeArgs = args.filter(arg => arg !== '--dangerously-skip-permissions');
   
   try {
     // Run Claude with real-time monitoring
