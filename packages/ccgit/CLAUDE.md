@@ -162,7 +162,6 @@ Task run deno run --allow-net --allow-env --allow-read --allow-run main.ts "--da
 Error: Input must be provided either through stdin or as a prompt argument when using --print
 
 期待する挙動
-<<<<<<< HEAD
 ccgit --dangerously-skip-permissionsできる
 対話モードでも--dangerously-skip-permissionsできる
 
@@ -171,6 +170,3 @@ ccgit --dangerously-skip-permissionsできる
 commit titleがAIに書いてもらう
 
 ## 対話モード時も、claude-codeがファイル変更するたびにcommitする（リアルタイム）
-=======
-ccgit --dangerously-skip-permissionsできる
->>>>>>> 1cfd17c (docs: add user instructions to CLAUDE.md)
