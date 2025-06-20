@@ -82,7 +82,9 @@ async function checkForTaskCompletion(chunk: string): Promise<void> {
             } else {
               diff = await git.getFileDiff(file.path);
             }
-          } catch {}
+          } catch {
+            // Ignore diff extraction errors
+          }
           return { ...file, diff };
         })
       );
@@ -111,10 +113,14 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
     delete env.CLAUDE_CODE_SSE_PORT;
     delete env.CLAUDE_CODE_ENTRYPOINT;
     
+    // For interactive mode (no args), don't use --print mode
+    const isInteractiveCall = filteredArgs.length === 0 || 
+      (filteredArgs.length === 1 && filteredArgs[0] === '--dangerously-skip-permissions');
+    
     const cmd = new Deno.Command("claude", {
-      args: filteredArgs,
-      stdout: "piped",
-      stderr: "piped",
+      args: isInteractiveCall ? [] : filteredArgs,
+      stdout: isInteractiveCall ? "inherit" : "piped",
+      stderr: isInteractiveCall ? "inherit" : "piped", 
       stdin: "inherit", // Always inherit stdin for interactive support
       env: env,
     });
@@ -124,49 +130,60 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
     let stdout = "";
     let stderr = "";
     
-    // Monitor stdout for task completion patterns
-    const stdoutReader = process.stdout.getReader();
-    const stderrReader = process.stderr.getReader();
-    
-    const decoder = new TextDecoder();
-    
-    // Read stdout chunks
-    const readStdout = async () => {
-      while (true) {
-        const { done, value } = await stdoutReader.read();
-        if (done) break;
-        
-        const chunk = decoder.decode(value);
-        stdout += chunk;
-        Deno.stdout.write(value); // Pass through to terminal
-        
-        // Check for task completion indicators
-        await checkForTaskCompletion(chunk);
-      }
-    };
-    
-    // Read stderr chunks  
-    const readStderr = async () => {
-      while (true) {
-        const { done, value } = await stderrReader.read();
-        if (done) break;
-        
-        const chunk = decoder.decode(value);
-        stderr += chunk;
-        Deno.stderr.write(value); // Pass through to terminal
-      }
-    };
-    
-    // Run both readers concurrently
-    await Promise.all([readStdout(), readStderr()]);
-    
-    const status = await process.status;
-    
-    return {
-      stdout,
-      stderr,
-      exitCode: status.code,
-    };
+    if (isInteractiveCall) {
+      // For interactive mode, just wait for completion without monitoring
+      const status = await process.status;
+      return {
+        stdout: "",
+        stderr: "",
+        exitCode: status.code,
+      };
+    } else {
+      // For non-interactive mode, monitor output for auto-commit
+      // Monitor stdout for task completion patterns
+      const stdoutReader = process.stdout.getReader();
+      const stderrReader = process.stderr.getReader();
+      
+      const decoder = new TextDecoder();
+      
+      // Read stdout chunks
+      const readStdout = async () => {
+        while (true) {
+          const { done, value } = await stdoutReader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value);
+          stdout += chunk;
+          Deno.stdout.write(value); // Pass through to terminal
+          
+          // Check for task completion indicators
+          await checkForTaskCompletion(chunk);
+        }
+      };
+      
+      // Read stderr chunks  
+      const readStderr = async () => {
+        while (true) {
+          const { done, value } = await stderrReader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value);
+          stderr += chunk;
+          Deno.stderr.write(value); // Pass through to terminal
+        }
+      };
+      
+      // Run both readers concurrently
+      await Promise.all([readStdout(), readStderr()]);
+      
+      const status = await process.status;
+      
+      return {
+        stdout,
+        stderr,
+        exitCode: status.code,
+      };
+    }
   } catch (error) {
     return {
       stdout: '',
