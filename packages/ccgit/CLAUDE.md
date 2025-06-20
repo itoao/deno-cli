@@ -167,3 +167,5 @@ ccgit --dangerously-skip-permissionsできる
 ## commit titleがAIに書いてもらえてない
 期待する挙動
 commit titleがAIに書いてもらう
+
+## 対話モード時も、claude-codeがファイル変更するたびにcommitする（リアルタイム）

@@ -7,24 +7,52 @@ import { checkoutSession, startSession, listSessions } from "./history.ts";
 import type { ClaudeOutput } from "./types.ts";
 
 let taskCounter = 0;
+let lastCommitTime = 0;
 
 async function checkForTaskCompletion(chunk: string): Promise<void> {
   // Patterns that indicate Claude Code completed a task
   const completionPatterns = [
+    // File operations
     /The file .* has been updated/,
     /File created successfully/,
+    /has been updated\. Here's the result/,
+    /The .* file .* has been updated/,
+    
+    // Tool usage completions
     /✅/,
     /Command completed successfully/,
     /Test passed/,
     /Build successful/,
     /Successfully/,
+    /completed successfully/i,
+    
+    // Edit tool specific patterns
+    /Here's the result of running.*on.*snippet.*of the edited file/,
+    /The.*has been updated/,
+    
+    // Common completion indicators
+    /\n\n/,  // Double newline often indicates completion
+    /Check /,  // TypeScript check completion
+    /\[0m\[32mCheck\[0m/,  // Deno check success pattern
   ];
+  
+  // Debug logging
+  if (chunk.trim()) {
+    console.log(`[DEBUG] Chunk: ${JSON.stringify(chunk.substring(0, 100))}`);
+  }
   
   const shouldCommit = completionPatterns.some(pattern => pattern.test(chunk));
   
   if (shouldCommit) {
-    try {
-      taskCounter++;
+    console.log(`[DEBUG] Commit triggered by pattern match`);
+    console.log(`[DEBUG] Chunk content: ${JSON.stringify(chunk.substring(0, 200))}`);
+  
+    // Add debouncing to prevent too many commits
+    const now = Date.now();
+    if (taskCounter === 0 || (now - lastCommitTime) > 5000) {
+      lastCommitTime = now;
+      try {
+        taskCounter++;
       
       // Check if there are changes to commit
       const hasChanges = await git.hasUncommittedChanges();
@@ -61,8 +89,9 @@ async function checkForTaskCompletion(chunk: string): Promise<void> {
       await git.commitChanges(title, metadata);
       
       console.log(`\n🎯 Auto-committed task ${taskCounter}`);
-    } catch (error) {
-      console.error(`Failed to auto-commit: ${error}`);
+      } catch (error) {
+        console.error(`Failed to auto-commit: ${error}`);
+      }
     }
   }
 }
@@ -133,39 +162,64 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
   }
 }
 
-async function handleClaudeSession(args: string[]): Promise<void> {
-  // Check if we're in a git repo
+async function runInteractiveClaudeWithMonitoring(args: string[]): Promise<void> {
   try {
-    await git.getGitRoot();
-  } catch {
-    // Not a git repo, just run claude normally  
-    if (args.length === 0) {
-      await $`claude`.spawn();
-    } else {
-      await $`claude ${args}`.spawn();
-    }
-    return;
-  }
-  
-  
-  try {
-    // Run Claude with real-time monitoring
-    console.log("🚀 Starting Claude session with auto-commit...");
+    const cmd = new Deno.Command("claude", {
+      args: args,
+      stdout: "piped",
+      stderr: "piped", 
+      stdin: "inherit",
+    });
     
-    // For interactive mode (no args), run directly without monitoring
-    if (args.length === 0) {
-      const cmd = new Deno.Command("claude", { stdin: "inherit", stdout: "inherit", stderr: "inherit" });
-      const status = await cmd.spawn().status;
-      Deno.exit(status.code);
-      return;
-    }
+    const process = cmd.spawn();
     
-    const output = await runClaudeWithMonitoring(args);
+    const decoder = new TextDecoder();
     
-    // Final commit for any remaining changes
+    // Monitor stdout for task completion patterns
+    const stdoutReader = process.stdout.getReader();
+    const stderrReader = process.stderr.getReader();
+    
+    // Read stdout chunks
+    const readStdout = async () => {
+      while (true) {
+        const { done, value } = await stdoutReader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        Deno.stdout.write(value); // Pass through to terminal
+        
+        // Check for task completion indicators
+        await checkForTaskCompletion(chunk);
+      }
+    };
+    
+    // Read stderr chunks  
+    const readStderr = async () => {
+      while (true) {
+        const { done, value } = await stderrReader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        Deno.stderr.write(value); // Pass through to terminal
+      }
+    };
+    
+    // Run both readers concurrently
+    await Promise.all([readStdout(), readStderr()]);
+    
+    const status = await process.status;
+    
+    // Final commit for any remaining changes in interactive mode
     const hasChanges = await git.hasUncommittedChanges();
     if (hasChanges) {
-      const metadata = parseClaudeOutput(output, args);
+      const sessionId = `interactive-session-${Date.now()}`;
+      const metadata = {
+        sessionId,
+        timestamp: new Date().toISOString(),
+        prompt: "Interactive session completion",
+        resumedFrom: undefined,
+      };
+      
       const changedFiles = await git.getStagedFiles();
       
       // Convert to shared GitFileChange type and add diff information
@@ -185,11 +239,76 @@ async function handleClaudeSession(args: string[]): Promise<void> {
       
       const title = await generateCommitTitleWithAI(filesWithDiff);
       await git.commitChanges(title, metadata);
-      console.log(`\n✅ Final session commit with ID: ${metadata.sessionId}`);
+      console.log(`\n✅ Final interactive session commit with ID: ${metadata.sessionId}`);
     }
     
     // Exit with Claude's exit code
-    Deno.exit(output.exitCode);
+    Deno.exit(status.code);
+  } catch (error) {
+    console.error('Error running interactive Claude session:', error);
+    Deno.exit(1);
+  }
+}
+
+async function handleClaudeSession(args: string[]): Promise<void> {
+  // Check if we're in a git repo
+  try {
+    await git.getGitRoot();
+  } catch {
+    // Not a git repo, just run claude normally  
+    if (args.length === 0) {
+      await $`claude`.spawn();
+    } else {
+      await $`claude ${args}`.spawn();
+    }
+    return;
+  }
+  
+  
+  try {
+    // Run Claude with real-time monitoring
+    console.log("🚀 Starting Claude session with auto-commit...");
+    
+    // Check if this is truly interactive mode (no args or only flags)
+    const hasPromptArg = args.some(arg => !arg.startsWith('-'));
+    const isInteractiveMode = args.length === 0 || !hasPromptArg;
+    
+    if (isInteractiveMode) {
+      // Run interactive mode with monitoring
+      await runInteractiveClaudeWithMonitoring(args);
+    } else {
+      // Run single command mode with monitoring
+      const output = await runClaudeWithMonitoring(args);
+      
+      // Final commit for any remaining changes
+      const hasChanges = await git.hasUncommittedChanges();
+      if (hasChanges) {
+        const metadata = parseClaudeOutput(output, args);
+        const changedFiles = await git.getStagedFiles();
+        
+        // Convert to shared GitFileChange type and add diff information
+        const filesWithDiff: SharedGitFileChange[] = await Promise.all(
+          changedFiles.map(async (file) => {
+            let diff = '';
+            try {
+              if (file.status === 'A') {
+                diff = await git.getFileContent(file.path);
+              } else {
+                diff = await git.getFileDiff(file.path);
+              }
+            } catch {}
+            return { ...file, diff };
+          })
+        );
+        
+        const title = await generateCommitTitleWithAI(filesWithDiff);
+        await git.commitChanges(title, metadata);
+        console.log(`\n✅ Final session commit with ID: ${metadata.sessionId}`);
+      }
+      
+      // Exit with Claude's exit code
+      Deno.exit(output.exitCode);
+    }
   } catch (error) {
     console.error('Error running Claude session:', error);
     Deno.exit(1);
@@ -241,7 +360,8 @@ Examples:
   const claudeArgs = args;
   
   // Handle interactive mode
-  if (claudeArgs.length === 0) {
+  const hasPromptArg = claudeArgs.some(arg => !arg.startsWith('-'));
+  if (claudeArgs.length === 0 || !hasPromptArg) {
     console.log(`🚀 Starting Claude interactive session with auto-commit...`);
     console.log(`🎯 Interactive mode with auto-commit enabled`);
   }

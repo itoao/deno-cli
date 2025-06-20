@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(deno check:*)"
+      "Bash(deno check:*)",
+      "Bash(find:*)",
+      "Bash(deno task:*)"
     ],
     "deny": []
   }
