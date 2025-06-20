@@ -98,11 +98,10 @@ ccgit start feature-auth
 
 ### 実行フロー
 1. `ccgit` 実行
-2. 現在の変更をstash（または初回commit）
-3. Claude CLI起動（`claude` コマンド）
-4. 対話モード開始
-5. **ユーザー入力 → Claude応答 → タスク完了検知 → 即座にcommit**（繰り返し）
-6. 終了時に最終commit（未コミットの変更があれば）
+2. Claude CLI起動（`claude` コマンド）
+3. 対話モード開始
+4. **ユーザー入力 → Claude応答 → タスク完了検知 → 即座にcommit**（繰り返し）
+5. 終了時に最終commit（未コミットの変更があれば）
 
 ### 自動コミットの検知パターン
 - "The file ... has been updated"
