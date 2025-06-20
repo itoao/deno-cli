@@ -123,17 +123,28 @@ async function handleClaudeSession(args: string[]): Promise<void> {
   try {
     await git.getGitRoot();
   } catch {
-    // Not a git repo, just run claude normally
-    await $`claude ${args}`.spawn();
+    // Not a git repo, just run claude normally  
+    if (args.length === 0) {
+      await $`claude`.spawn();
+    } else {
+      await $`claude ${args}`.spawn();
+    }
     return;
   }
   
-  // Stash any uncommitted changes
-  const hasStashed = await git.stashChanges();
   
   try {
     // Run Claude with real-time monitoring
     console.log("🚀 Starting Claude session with auto-commit...");
+    
+    // For interactive mode (no args), run directly without monitoring
+    if (args.length === 0) {
+      const cmd = new Deno.Command("claude", { stdin: "inherit", stdout: "inherit", stderr: "inherit" });
+      const status = await cmd.spawn().status;
+      Deno.exit(status.code);
+      return;
+    }
+    
     const output = await runClaudeWithMonitoring(args);
     
     // Final commit for any remaining changes
@@ -199,6 +210,25 @@ Examples:
   
   // Filter out ccgit-specific flags before passing to Claude
   const claudeArgs = args.filter(arg => arg !== '--dangerously-skip-permissions');
+  
+  // For interactive mode, require a prompt
+  if (claudeArgs.length === 0) {
+    console.log(`ccgit - Claude Chat Git Integration
+
+Interactive mode is not currently supported. Please provide a prompt:
+
+Examples:
+  ccgit "Fix the TypeScript errors"
+  ccgit "Add tests for the new feature"
+  ccgit "Refactor the user authentication code"
+  
+For other ccgit commands:
+  ccgit checkout <session-id>   # Checkout a previous session
+  ccgit start <name>           # Create a new branch for a session  
+  ccgit list                   # List recent Claude sessions
+  ccgit --help                 # Show this help`);
+    return;
+  }
   
   // Pass through to Claude with git tracking
   await handleClaudeSession(claudeArgs);
