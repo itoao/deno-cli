@@ -159,11 +159,9 @@ async function handleClaudeSession(args: string[]): Promise<void> {
     
     // Exit with Claude's exit code
     Deno.exit(output.exitCode);
-  } finally {
-    // Restore stashed changes if any
-    if (hasStashed) {
-      await git.popStash();
-    }
+  } catch (error) {
+    console.error('Error running Claude session:', error);
+    Deno.exit(1);
   }
 }
 
