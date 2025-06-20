@@ -105,11 +105,16 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
     // Filter out --print flag if no prompt is provided and stdin is empty
     const filteredArgs = [...args];
     
+    // Clear CLAUDECODE environment variable to prevent automatic --print mode
+    const env = { ...Deno.env.toObject() };
+    delete env.CLAUDECODE;
+    
     const cmd = new Deno.Command("claude", {
       args: filteredArgs,
       stdout: "piped",
       stderr: "piped",
       stdin: "inherit", // Always inherit stdin for interactive support
+      env: env,
     });
     
     const process = cmd.spawn();
@@ -176,10 +181,14 @@ async function handleClaudeSession(args: string[]): Promise<void> {
     await git.getGitRoot();
   } catch {
     // Not a git repo, just run claude normally
+    // Clear CLAUDECODE environment variable to prevent automatic --print mode
+    const env = { ...Deno.env.toObject() };
+    delete env.CLAUDECODE;
+    
     if (args.length === 0) {
-      await $`claude`.spawn();
+      await $`claude`.env(env).spawn();
     } else {
-      await $`claude ${args}`.spawn();
+      await $`claude ${args}`.env(env).spawn();
     }
     return;
   }
@@ -240,7 +249,9 @@ async function handleClaudeSession(args: string[]): Promise<void> {
                 } else {
                   diff = await git.getFileDiff(file.path);
                 }
-              } catch {}
+              } catch {
+                // Ignore diff extraction errors
+              }
               return { ...file, diff };
             })
           );
@@ -279,7 +290,9 @@ async function handleClaudeSession(args: string[]): Promise<void> {
               } else {
                 diff = await git.getFileDiff(file.path);
               }
-            } catch {}
+            } catch {
+              // Ignore diff extraction errors
+            }
             return { ...file, diff };
           })
         );
