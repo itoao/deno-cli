@@ -112,3 +112,21 @@ export async function createBranch(name: string): Promise<void> {
     throw new Error(`Failed to create branch: ${error}`);
   }
 }
+
+export async function getFileContent(path: string): Promise<string> {
+  try {
+    const result = await $`git show :${path}`.text();
+    return result;
+  } catch (error) {
+    throw new Error(`Failed to get file content: ${error}`);
+  }
+}
+
+export async function getFileDiff(path: string): Promise<string> {
+  try {
+    const result = await $`git diff --cached ${path}`.text();
+    return result;
+  } catch (error) {
+    throw new Error(`Failed to get file diff: ${error}`);
+  }
+}

@@ -2,7 +2,7 @@
 import { $ } from "jsr:@david/dax@0.40.0";
 import * as git from "./git.ts";
 import { parseClaudeOutput } from "./metadata.ts";
-import { generateCommitTitle } from "./title-generator.ts";
+import { generateCommitTitle as generateCommitTitleWithAI, type GitFileChange as SharedGitFileChange } from "@deno-cli/shared";
 import { checkoutSession, startSession, listSessions } from "./history.ts";
 import type { ClaudeOutput } from "./types.ts";
 
@@ -40,7 +40,22 @@ async function checkForTaskCompletion(chunk: string): Promise<void> {
         resumedFrom: undefined,
       };
       
-      const title = generateCommitTitle(changedFiles, metadata);
+      // Convert to shared GitFileChange type and add diff information
+      const filesWithDiff: SharedGitFileChange[] = await Promise.all(
+        changedFiles.map(async (file) => {
+          let diff = '';
+          try {
+            if (file.status === 'A') {
+              diff = await git.getFileContent(file.path);
+            } else {
+              diff = await git.getFileDiff(file.path);
+            }
+          } catch {}
+          return { ...file, diff };
+        })
+      );
+      
+      const title = await generateCommitTitleWithAI(filesWithDiff);
       
       // Commit the changes
       await git.commitChanges(title, metadata);
@@ -152,7 +167,23 @@ async function handleClaudeSession(args: string[]): Promise<void> {
     if (hasChanges) {
       const metadata = parseClaudeOutput(output, args);
       const changedFiles = await git.getStagedFiles();
-      const title = generateCommitTitle(changedFiles, metadata);
+      
+      // Convert to shared GitFileChange type and add diff information
+      const filesWithDiff: SharedGitFileChange[] = await Promise.all(
+        changedFiles.map(async (file) => {
+          let diff = '';
+          try {
+            if (file.status === 'A') {
+              diff = await git.getFileContent(file.path);
+            } else {
+              diff = await git.getFileDiff(file.path);
+            }
+          } catch {}
+          return { ...file, diff };
+        })
+      );
+      
+      const title = await generateCommitTitleWithAI(filesWithDiff);
       await git.commitChanges(title, metadata);
       console.log(`\n✅ Final session commit with ID: ${metadata.sessionId}`);
     }
@@ -206,26 +237,13 @@ Examples:
     return;
   }
   
-  // Filter out ccgit-specific flags before passing to Claude
-  const claudeArgs = args.filter(arg => arg !== '--dangerously-skip-permissions');
+  // Pass all arguments to Claude (no filtering needed)
+  const claudeArgs = args;
   
-  // For interactive mode, require a prompt
+  // Handle interactive mode
   if (claudeArgs.length === 0) {
-    console.log(`ccgit - Claude Chat Git Integration
-
-Interactive mode is not currently supported. Please provide a prompt:
-
-Examples:
-  ccgit "Fix the TypeScript errors"
-  ccgit "Add tests for the new feature"
-  ccgit "Refactor the user authentication code"
-  
-For other ccgit commands:
-  ccgit checkout <session-id>   # Checkout a previous session
-  ccgit start <name>           # Create a new branch for a session  
-  ccgit list                   # List recent Claude sessions
-  ccgit --help                 # Show this help`);
-    return;
+    console.log(`🚀 Starting Claude interactive session with auto-commit...`);
+    console.log(`🎯 Interactive mode with auto-commit enabled`);
   }
   
   // Pass through to Claude with git tracking
