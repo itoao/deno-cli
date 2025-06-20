@@ -103,6 +103,66 @@ async function checkForTaskCompletion(chunk: string): Promise<void> {
 }
 
 async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
+  // Claudeプロセス実行中にファイル変更を監視し、変更があれば即コミット
+  const watcher = Deno.watchFs(".");
+  let watcherActive = true;
+  let commitInProgress = false;
+  let lastCommitTime = 0;
+  let changeBuffer = false;
+
+  // コミット処理
+  async function commitIfChanged() {
+    if (commitInProgress) return;
+    commitInProgress = true;
+    try {
+      const hasChanges = await git.hasUncommittedChanges();
+      if (!hasChanges) return;
+      const changedFiles = await git.getStagedFiles();
+      const metadata = {
+        sessionId: `fswatch-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        prompt: "Claude code file change detected",
+        resumedFrom: undefined,
+      };
+      const filesWithDiff = await Promise.all(
+        changedFiles.map(async (file) => {
+          let diff = '';
+          try {
+            if (file.status === 'A') {
+              diff = await git.getFileContent(file.path);
+            } else {
+              diff = await git.getFileDiff(file.path);
+            }
+          } catch {}
+          return { ...file, diff };
+        })
+      );
+      const title = generateCommitTitleWithAI(filesWithDiff, metadata);
+      await git.commitChanges(title, metadata);
+      lastCommitTime = Date.now();
+      console.log(`\n🎯 Auto-committed by fswatch`);
+    } finally {
+      commitInProgress = false;
+    }
+  }
+
+  // ファイル監視ループ（デバウンス付き）
+  (async () => {
+    for await (const event of watcher) {
+      if (!watcherActive) break;
+      if (["modify", "create", "remove"].includes(event.kind)) {
+        changeBuffer = true;
+        // 500msデバウンス
+        setTimeout(async () => {
+          if (changeBuffer && Date.now() - lastCommitTime > 400) {
+            changeBuffer = false;
+            await commitIfChanged();
+          }
+        }, 500);
+      }
+    }
+  })();
+
   try {
     // Filter out --print flag if no prompt is provided and stdin is empty
     const filteredArgs = [...args];
@@ -151,13 +211,10 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
         while (true) {
           const { done, value } = await stdoutReader.read();
           if (done) break;
-          
           const chunk = decoder.decode(value);
           stdout += chunk;
           Deno.stdout.write(value); // Pass through to terminal
-          
-          // Check for task completion indicators
-          await checkForTaskCompletion(chunk);
+          // checkForTaskCompletion(chunk); // ← ここは無効化
         }
       };
       
@@ -177,6 +234,9 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
       await Promise.all([readStdout(), readStderr()]);
       
       const status = await process.status;
+      
+      // Claudeプロセス終了時にwatcherを停止
+      watcherActive = false;
       
       return {
         stdout,
@@ -221,11 +281,9 @@ async function handleClaudeSession(args: string[]): Promise<void> {
   // Interactive mode: no args or only --dangerously-skip-permissions
   const isInteractiveMode = !hasOtherArgs;
   
-  // Prepare claude args: only add --dangerously-skip-permissions for non-interactive mode
+  // Prepare claude args: always add --dangerously-skip-permissions if not present
   const claudeArgs = [...args];
-  
-  // For non-interactive mode (single command), add --dangerously-skip-permissions if not present
-  if (!isInteractiveMode && !claudeArgs.includes('--dangerously-skip-permissions')) {
+  if (!claudeArgs.includes('--dangerously-skip-permissions')) {
     claudeArgs.push('--dangerously-skip-permissions');
   }
   
