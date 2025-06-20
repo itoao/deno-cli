@@ -261,6 +261,10 @@ async function handleClaudeSession(args: string[]): Promise<void> {
     return;
   }
   
+  // Filter out ccgit-specific handling of --dangerously-skip-permissions
+  // If user wants --dangerously-skip-permissions but no other args, start interactive mode
+  const hasDangerouslySkipOnly = args.length === 1 && args[0] === '--dangerously-skip-permissions';
+  const claudeArgs = hasDangerouslySkipOnly ? [] : args;
   
   try {
     // Run Claude with real-time monitoring
@@ -269,11 +273,14 @@ async function handleClaudeSession(args: string[]): Promise<void> {
     // Check if this is truly interactive mode
     // For Claude CLI: only no arguments = interactive mode
     // All other cases (including flags only) are non-interactive
-    const isInteractiveMode = args.length === 0;
+    const isInteractiveMode = claudeArgs.length === 0;
     
     if (isInteractiveMode) {
       // Run interactive mode with monitoring
-      await runInteractiveClaudeWithMonitoring(args);
+      if (hasDangerouslySkipOnly) {
+        console.log(`⚠️  --dangerously-skip-permissions enabled for this session`);
+      }
+      await runInteractiveClaudeWithMonitoring(claudeArgs);
     } else {
       // Run single command mode with monitoring
       const output = await runClaudeWithMonitoring(args);
@@ -354,17 +361,18 @@ Examples:
     return;
   }
   
-  // Pass all arguments to Claude (no filtering needed)
-  const claudeArgs = args;
-  
-  // Handle interactive mode
-  if (claudeArgs.length === 0) {
+  // Handle interactive mode  
+  if (args.length === 0) {
     console.log(`🚀 Starting Claude interactive session with auto-commit...`);
     console.log(`🎯 Interactive mode with auto-commit enabled`);
+  } else if (args.length === 1 && args[0] === '--dangerously-skip-permissions') {
+    console.log(`🚀 Starting Claude interactive session with auto-commit...`);
+    console.log(`🎯 Interactive mode with auto-commit enabled`);
+    console.log(`⚠️  --dangerously-skip-permissions enabled for this session`);
   }
   
   // Pass through to Claude with git tracking
-  await handleClaudeSession(claudeArgs);
+  await handleClaudeSession(args);
 }
 
 if (import.meta.main) {
