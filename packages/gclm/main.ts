@@ -1,12 +1,7 @@
 import { $ } from "jsr:@david/dax@0.40.0";
 import { parseArgs } from "node:util";
 import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code";
-
-interface GitFileChange {
-  path: string;
-  status: 'A' | 'M' | 'D' | 'R' | 'C' | 'U' | 'T';
-  diff: string;
-}
+import { generateCommitTitle, categorizeFiles, type GitFileChange } from "../../shared/commit-title-generator.ts";
 
 
 interface Config {
@@ -69,7 +64,7 @@ async function getGitStagedFiles(): Promise<GitFileChange[]> {
           // For modified/deleted files, use git diff
           diff = await executeGitCommand(["diff", "--cached", path]);
         }
-        return { path, status, diff };
+        return { path, status, diff } as GitFileChange;
       } catch (error) {
         console.warn(`⚠️ Failed to get diff for ${path}:`, error);
         return { path, status, diff: '' };
@@ -84,7 +79,7 @@ async function getGitStagedFiles(): Promise<GitFileChange[]> {
 }
 
 function createFilePreview(file: GitFileChange): string {
-  const diffLines = file.diff.split('\n');
+  const diffLines = file.diff ? file.diff.split('\n') : [];
   const preview = diffLines.slice(0, CONFIG.maxDiffPreviewLines).join('\n');
   return `- ${file.path} (${file.status})\n  Changes: ${preview}`;
 }
@@ -227,40 +222,6 @@ function convertPathsToFileGroups(groupPaths: string[][], files: GitFileChange[]
   return groups;
 }
 
-const FILE_TYPE_PATTERNS = {
-  config: (path: string) => path.endsWith('.json') || path.includes('config') || path.endsWith('.toml') || path.endsWith('.yaml') || path.endsWith('.yml'),
-  test: (path: string) => path.includes('test') || path.includes('spec') || path.endsWith('.test.ts') || path.endsWith('.spec.ts'),
-  docs: (path: string) => path.endsWith('.md') || path.endsWith('.rst') || path.includes('docs/'),
-  build: (path: string) => path.includes('build') || path.includes('dist') || path.endsWith('.lock'),
-} as const;
-
-function categorizeFiles(files: GitFileChange[]) {
-  const categories = {
-    config: [] as GitFileChange[],
-    test: [] as GitFileChange[],
-    docs: [] as GitFileChange[],
-    build: [] as GitFileChange[],
-    other: [] as GitFileChange[],
-  };
-  
-  for (const file of files) {
-    let categorized = false;
-    
-    for (const [category, matcher] of Object.entries(FILE_TYPE_PATTERNS)) {
-      if (matcher(file.path)) {
-        categories[category as keyof typeof categories].push(file);
-        categorized = true;
-        break;
-      }
-    }
-    
-    if (!categorized) {
-      categories.other.push(file);
-    }
-  }
-  
-  return categories;
-}
 
 function fallbackGrouping(files: GitFileChange[]): GitFileChange[][] {
   const categories = categorizeFiles(files);
@@ -276,101 +237,6 @@ function fallbackGrouping(files: GitFileChange[]): GitFileChange[][] {
   return groups.length > 0 ? groups : [files];
 }
 
-function createCommitPrompt(files: GitFileChange[]): string {
-  const fileList = files.map(f => `${f.path} (${f.status})`).join('\n');
-  const diffSample = files
-    .map(f => f.diff.split('\n').slice(0, 10).join('\n'))
-    .join('\n---\n');
-  
-  return `Generate a concise commit title for these changes:
-
-Files:
-${fileList}
-
-Diff:
-${diffSample}
-
-Rules:
-- Use conventional commit format (feat:, fix:, docs:, refactor:, test:, config:, chore:)
-- Be specific about what changed
-- Max ${CONFIG.maxCommitTitleLength} characters
-- No quotes
-- IMPORTANT: Return ONLY the commit title, no explanations or additional text
-
-Example output:
-feat: add user authentication
-fix: resolve memory leak in parser
-chore: update dependencies
-
-Return only the title:`;
-}
-
-function extractTitleFromMessages(messages: SDKMessage[]): string | null {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
-    
-    if (message.type === 'result' && 'result' in message && message.result) {
-      const title = String(message.result).trim();
-      // Extract only the commit title, remove any extra explanatory text
-      const lines = title.split('\n');
-      return lines[0].trim();
-    }
-    
-    if (message.type === 'assistant' && 'message' in message && message.message?.content) {
-      for (const content of message.message.content) {
-        if (content.type === 'text' && content.text) {
-          const title = String(content.text).trim();
-          // Extract only the commit title, remove any extra explanatory text
-          const lines = title.split('\n');
-          return lines[0].trim();
-        }
-      }
-    }
-  }
-  
-  return null;
-}
-
-function generateFallbackTitle(files: GitFileChange[]): string {
-  const categories = categorizeFiles(files);
-  
-  if (categories.test.length > 0) return "test: update tests";
-  if (categories.docs.length > 0) return "docs: update documentation";
-  if (categories.config.length > 0) return "config: update configuration";
-  if (categories.build.length > 0) return "build: update build files";
-  if (files.some(f => f.status === 'A')) return "feat: add new files";
-  if (files.some(f => f.status === 'D')) return "chore: remove files";
-  return "refactor: update code";
-}
-
-async function generateCommitTitle(files: GitFileChange[]): Promise<string> {
-  const prompt = createCommitPrompt(files);
-
-  try {
-    const messages: SDKMessage[] = [];
-    const abortController = new AbortController();
-    
-    for await (const message of query({
-      prompt,
-      abortController,
-      options: CONFIG.queryOptions,
-    })) {
-      messages.push(message);
-    }
-    
-    const title = extractTitleFromMessages(messages);
-    if (!title) {
-      throw new Error("No valid title found in messages");
-    }
-    
-    return title.length > CONFIG.maxCommitTitleLength 
-      ? title.substring(0, CONFIG.maxCommitTitleLength - 3) + '...'
-      : title;
-  } catch (error) {
-    console.warn("⚠️ Failed to generate title, using fallback:", error instanceof Error ? error.message : String(error));
-    return generateFallbackTitle(files);
-  }
-}
 
 async function hasChangesToCommit(): Promise<boolean> {
   try {
@@ -405,7 +271,11 @@ async function processCommitGroup(group: GitFileChange[], index: number, total: 
   console.log(`\n📝 Commit ${index + 1}/${total}:`);
   console.log(`   Files: ${group.map(f => f.path).join(', ')}`);
   
-  const title = await generateCommitTitle(group);
+  const title = await generateCommitTitle(group, {
+    maxCommitTitleLength: CONFIG.maxCommitTitleLength,
+    maxDiffPreviewLines: CONFIG.maxDiffPreviewLines,
+    queryOptions: CONFIG.queryOptions,
+  });
   await createCommit(group, title);
 }
 
@@ -468,7 +338,11 @@ Make sure to stage your files with 'git add' before running gclm.
       if (parsed.values.verbose) {
         console.log("📝 Single file found, creating single commit...");
       }
-      const title = await generateCommitTitle(stagedFiles);
+      const title = await generateCommitTitle(stagedFiles, {
+        maxCommitTitleLength: CONFIG.maxCommitTitleLength,
+        maxDiffPreviewLines: CONFIG.maxDiffPreviewLines,
+        queryOptions: CONFIG.queryOptions,
+      });
       await createCommit(stagedFiles, title);
       console.log("\n🎉 Commit created!");
       return;
@@ -507,22 +381,6 @@ Deno.test("JSONレスポンスからファイルグループを抽出する", ()
   }
 });
 
-Deno.test("設定ファイルを正しく分類する", () => {
-  const files = [
-    { path: "package.json", status: "M", diff: "" },
-    { path: "config.toml", status: "A", diff: "" },  
-    { path: "src/main.ts", status: "M", diff: "" }
-  ] as GitFileChange[];
-  
-  const result = categorizeFiles(files);
-  
-  if (result.config.length !== 2) {
-    throw new Error(`Expected 2 config files, got ${result.config.length}`);
-  }
-  if (result.other.length !== 1) {
-    throw new Error(`Expected 1 other file, got ${result.other.length}`);
-  }
-});
 
 if (import.meta.main) {
   main();

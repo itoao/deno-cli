@@ -99,6 +99,9 @@ export async function getCommitsBySessionId(sessionId: string): Promise<string[]
 
 export async function checkoutCommit(commitHash: string): Promise<void> {
   try {
+    // First verify the commit exists
+    await $`git rev-parse --verify ${commitHash}`.quiet();
+    // Then checkout
     await $`git checkout ${commitHash}`.quiet();
   } catch (error) {
     throw new Error(`Failed to checkout commit: ${error}`);
@@ -110,5 +113,23 @@ export async function createBranch(name: string): Promise<void> {
     await $`git checkout -b ${name}`.quiet();
   } catch (error) {
     throw new Error(`Failed to create branch: ${error}`);
+  }
+}
+
+export async function getFileContent(path: string): Promise<string> {
+  try {
+    const result = await $`git show :${path}`.text();
+    return result;
+  } catch (error) {
+    throw new Error(`Failed to get file content: ${error}`);
+  }
+}
+
+export async function getFileDiff(path: string): Promise<string> {
+  try {
+    const result = await $`git diff --cached ${path}`.text();
+    return result;
+  } catch (error) {
+    throw new Error(`Failed to get file diff: ${error}`);
   }
 }

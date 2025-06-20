@@ -2,29 +2,61 @@
 import { $ } from "jsr:@david/dax@0.40.0";
 import * as git from "./git.ts";
 import { parseClaudeOutput } from "./metadata.ts";
-import { generateCommitTitle } from "./title-generator.ts";
+// import { generateCommitTitle as generateCommitTitleWithAI, type GitFileChange as SharedGitFileChange } from "@deno-cli/shared";
+import { generateCommitTitle as generateCommitTitleWithAI } from "./title-generator.ts";
+
+type SharedGitFileChange = {
+  path: string;
+  status: 'A' | 'M' | 'D' | 'R' | 'C' | 'U' | 'T';
+  diff: string;
+};
 import { checkoutSession, startSession, listSessions } from "./history.ts";
 import type { ClaudeOutput } from "./types.ts";
 
 let taskCounter = 0;
+let lastCommitTime = 0;
 
 async function checkForTaskCompletion(chunk: string): Promise<void> {
   // Patterns that indicate Claude Code completed a task
   const completionPatterns = [
+    // File operations
     /The file .* has been updated/,
     /File created successfully/,
+    /has been updated\. Here's the result/,
+    /The .* file .* has been updated/,
+    
+    // Tool usage completions
     /✅/,
     /Command completed successfully/,
     /Test passed/,
     /Build successful/,
     /Successfully/,
+    /completed successfully/i,
+    
+    // Edit tool specific patterns
+    /Here's the result of running.*on.*snippet.*of the edited file/,
+    /The.*has been updated/,
+    
+    // Common completion indicators
+    /\n\n/,  // Double newline often indicates completion
+    /Check /,  // TypeScript check completion
+    /\[0m\[32mCheck\[0m/,  // Deno check success pattern
   ];
+  
+  // Debug logging (disabled for cleaner output)
+  // if (chunk.trim()) {
+  //   console.log(`[DEBUG] Chunk: ${JSON.stringify(chunk.substring(0, 100))}`);
+  // }
   
   const shouldCommit = completionPatterns.some(pattern => pattern.test(chunk));
   
   if (shouldCommit) {
-    try {
-      taskCounter++;
+    // Add debouncing to prevent too many commits
+    const now = Date.now();
+    if (taskCounter === 0 || (now - lastCommitTime) > 5000) {
+      lastCommitTime = now;
+      try {
+        taskCounter++;
       
       // Check if there are changes to commit
       const hasChanges = await git.hasUncommittedChanges();
@@ -40,14 +72,30 @@ async function checkForTaskCompletion(chunk: string): Promise<void> {
         resumedFrom: undefined,
       };
       
-      const title = generateCommitTitle(changedFiles, metadata);
+      // Convert to shared GitFileChange type and add diff information
+      const filesWithDiff: SharedGitFileChange[] = await Promise.all(
+        changedFiles.map(async (file) => {
+          let diff = '';
+          try {
+            if (file.status === 'A') {
+              diff = await git.getFileContent(file.path);
+            } else {
+              diff = await git.getFileDiff(file.path);
+            }
+          } catch {}
+          return { ...file, diff };
+        })
+      );
+      
+      const title = generateCommitTitleWithAI(filesWithDiff, metadata);
       
       // Commit the changes
       await git.commitChanges(title, metadata);
       
       console.log(`\n🎯 Auto-committed task ${taskCounter}`);
-    } catch (error) {
-      console.error(`Failed to auto-commit: ${error}`);
+      } catch (error) {
+        console.error(`Failed to auto-commit: ${error}`);
+      }
     }
   }
 }
@@ -118,12 +166,100 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
   }
 }
 
+async function runInteractiveClaudeWithMonitoring(args: string[]): Promise<void> {
+  try {
+    const cmd = new Deno.Command("claude", {
+      args: args.length === 0 ? undefined : args,
+      stdout: "piped",
+      stderr: "piped", 
+      stdin: "inherit",
+    });
+    
+    const process = cmd.spawn();
+    
+    const decoder = new TextDecoder();
+    
+    // Monitor stdout for task completion patterns
+    const stdoutReader = process.stdout.getReader();
+    const stderrReader = process.stderr.getReader();
+    
+    // Read stdout chunks
+    const readStdout = async () => {
+      while (true) {
+        const { done, value } = await stdoutReader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        Deno.stdout.write(value); // Pass through to terminal
+        
+        // Check for task completion indicators
+        await checkForTaskCompletion(chunk);
+      }
+    };
+    
+    // Read stderr chunks  
+    const readStderr = async () => {
+      while (true) {
+        const { done, value } = await stderrReader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        Deno.stderr.write(value); // Pass through to terminal
+      }
+    };
+    
+    // Run both readers concurrently
+    await Promise.all([readStdout(), readStderr()]);
+    
+    const status = await process.status;
+    
+    // Final commit for any remaining changes in interactive mode
+    const hasChanges = await git.hasUncommittedChanges();
+    if (hasChanges) {
+      const sessionId = `interactive-session-${Date.now()}`;
+      const metadata = {
+        sessionId,
+        timestamp: new Date().toISOString(),
+        prompt: "Interactive session completion",
+        resumedFrom: undefined,
+      };
+      
+      const changedFiles = await git.getStagedFiles();
+      
+      // Convert to shared GitFileChange type and add diff information
+      const filesWithDiff: SharedGitFileChange[] = await Promise.all(
+        changedFiles.map(async (file) => {
+          let diff = '';
+          try {
+            if (file.status === 'A') {
+              diff = await git.getFileContent(file.path);
+            } else {
+              diff = await git.getFileDiff(file.path);
+            }
+          } catch {}
+          return { ...file, diff };
+        })
+      );
+      
+      const title = generateCommitTitleWithAI(filesWithDiff, metadata);
+      await git.commitChanges(title, metadata);
+      console.log(`\n✅ Final interactive session commit with ID: ${metadata.sessionId}`);
+    }
+    
+    // Exit with Claude's exit code
+    Deno.exit(status.code);
+  } catch (error) {
+    console.error('Error running interactive Claude session:', error);
+    Deno.exit(1);
+  }
+}
+
 async function handleClaudeSession(args: string[]): Promise<void> {
   // Check if we're in a git repo
   try {
     await git.getGitRoot();
   } catch {
-    // Not a git repo, just run claude normally  
+    // Not a git repo, just run claude normally
     if (args.length === 0) {
       await $`claude`.spawn();
     } else {
@@ -132,31 +268,73 @@ async function handleClaudeSession(args: string[]): Promise<void> {
     return;
   }
   
+  // Filter out ccgit-specific handling of --dangerously-skip-permissions
+  // If user wants --dangerously-skip-permissions but no other args, start interactive mode
+  const hasDangerouslySkipOnly = args.length === 1 && args[0] === '--dangerously-skip-permissions';
+  const claudeArgs = args.filter(arg => arg !== '--dangerously-skip-permissions');
   
   try {
     // Run Claude with real-time monitoring
     console.log("🚀 Starting Claude session with auto-commit...");
+    // Check if this is truly interactive mode
+    // For Claude CLI: only no arguments = interactive mode
+    // All other cases (including flags only) are non-interactive
+    const isInteractiveMode = claudeArgs.length === 0;
     
-    // Run with monitoring for both interactive and non-interactive modes
-    if (args.length === 0) {
-      // Interactive mode - also needs monitoring
-      console.log("🎯 Interactive mode with auto-commit enabled");
+    if (isInteractiveMode) {
+      // Run interactive mode with monitoring
+      if (hasDangerouslySkipOnly) {
+        console.log(`⚠️  To enable --dangerously-skip-permissions in interactive mode:`);
+        console.log(`   Type: /mode --dangerously-skip-permissions`);
+        console.log(`   Or press Shift+Tab to toggle auto-accept mode`);
+        console.log(``);
+      }
+      // For interactive mode with no args, use $`claude` directly to avoid --print issues
+      if (args.length === 0) {
+        try {
+          await $`claude`.spawn();
+        } catch (error) {
+          console.error(`❌ Claude CLI execution failed: ${error}`);
+          console.log(`ℹ️  Try running 'claude doctor' to diagnose Claude CLI issues`);
+          console.log(`ℹ️  Or run 'claude' directly to test Claude CLI`);
+          Deno.exit(1);
+        }
+      } else {
+        await runInteractiveClaudeWithMonitoring([]);
+      }
+    } else {
+      // Run single command mode with monitoring
+      const output = await runClaudeWithMonitoring(claudeArgs);
+      
+      // Final commit for any remaining changes
+      const hasChanges = await git.hasUncommittedChanges();
+      if (hasChanges) {
+        const metadata = parseClaudeOutput(output, args);
+        const changedFiles = await git.getStagedFiles();
+        
+        // Convert to shared GitFileChange type and add diff information
+        const filesWithDiff: SharedGitFileChange[] = await Promise.all(
+          changedFiles.map(async (file) => {
+            let diff = '';
+            try {
+              if (file.status === 'A') {
+                diff = await git.getFileContent(file.path);
+              } else {
+                diff = await git.getFileDiff(file.path);
+              }
+            } catch {}
+            return { ...file, diff };
+          })
+        );
+        
+        const title = generateCommitTitleWithAI(filesWithDiff, metadata);
+        await git.commitChanges(title, metadata);
+        console.log(`\n✅ Final session commit with ID: ${metadata.sessionId}`);
+      }
+      
+      // Exit with Claude's exit code
+      Deno.exit(output.exitCode);
     }
-    
-    const output = await runClaudeWithMonitoring(args);
-    
-    // Final commit for any remaining changes
-    const hasChanges = await git.hasUncommittedChanges();
-    if (hasChanges) {
-      const metadata = parseClaudeOutput(output, args);
-      const changedFiles = await git.getStagedFiles();
-      const title = generateCommitTitle(changedFiles, metadata);
-      await git.commitChanges(title, metadata);
-      console.log(`\n✅ Final session commit with ID: ${metadata.sessionId}`);
-    }
-    
-    // Exit with Claude's exit code
-    Deno.exit(output.exitCode);
   } catch (error) {
     console.error('Error running Claude session:', error);
     Deno.exit(1);
@@ -203,12 +381,19 @@ Examples:
 `);
     return;
   }
+  // Handle interactive mode  
+  if (args.length === 0) {
+    console.log(`🚀 Starting Claude interactive session with auto-commit...`);
+    console.log(`🎯 Interactive mode with auto-commit enabled`);
+  } else if (args.length === 1 && args[0] === '--dangerously-skip-permissions') {
+    console.log(`🚀 Starting Claude interactive session with auto-commit...`);
+    console.log(`🎯 Interactive mode with auto-commit enabled`);
+    console.log(`⚠️  --dangerously-skip-permissions enabled for this session`);
+  }
   
-  // Filter out ccgit-specific flags before passing to Claude
-  const claudeArgs = args.filter(arg => arg !== '--dangerously-skip-permissions');
-  
-  // Pass through to Claude with git tracking
-  await handleClaudeSession(claudeArgs);
+  // Pass through to Claude with git tracking (filter out ccgit-specific flags)
+  const filteredArgs = args.filter(arg => arg !== '--dangerously-skip-permissions');
+  await handleClaudeSession(filteredArgs);
 }
 
 if (import.meta.main) {

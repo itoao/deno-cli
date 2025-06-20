@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(deno check:*)"
+      "Bash(deno check:*)",
+      "Bash(find:*)",
+      "Bash(deno task:*)",
+      "Bash(gh pr list:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge-base:*)",
+      "Bash(git rebase:*)",
+      "Bash(git push:*)",
+      "Bash(git merge:*)"
     ],
     "deny": []
   }
