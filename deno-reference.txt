@@ -1,0 +1,319 @@
+去年末ぐらいから Deno を使う割合がグッと増えてきた。最近のJS関連は7割ぐらい deno 環境の VSCode でコードを書いている気がする。
+
+今回はいくつかの実例を示しながら、実際に Deno 使えるじゃんというイメージを持ってもらうためのユースケースを紹介していく。
+
+というか、 deno が普及してくれないと、自分が作ったツールの紹介を全部 deno のインストールから書かないといけなくなる。みんなインストールしといて。
+
+
+
+最初に: なぜ Deno を使いたいか
+一番の問題点、Node は新しいプロジェクトを一式整えるための手間が非常に重い。
+
+とくに ts で書いたものを他の環境に渡すための方法が未だにしんどい。ある環境で動いたコードをそのままコピーしても、プロジェクト設定の非互換を踏む可能性が非常に高い。
+
+deno にそういう側面がないとは言わないが、非常に少ない。とくに TS が直接動く + HTTP Import で、一度書いたコードのポータビリティが非常に高い。
+
+URL のフルパスを依存に書くのが面倒くさいと思われそうだが、実際には補完が優秀なので、全然困らない。書いた時点でバージョンを固定できるのも、個人的にはプラス要素。
+
+import "https://deno.land/std@" // ^ ここでバージョン一覧の補完が出る
+import "https://deno.land/std@0.223.0/path/" // ここでリモートのファイル一覧の補完が出る
+
+元々自分はゼロコンフィグなツールを優先して使うようにしていて、webpack を ts-loader だけで使うとか、vite でプラグインを使わないとか、フォーマッタや Linter は設定をほぼいじらずに未設定で使うようにしていたので、設定が少ないのはそれだけで価値が高いと思っている。
+
+そもそもの話、 フロントエンドは node の shim は使ったとしても別に node ランタイムに依存していないし、Edge Worker 環境は依存が少ない。今でも残っている node 強依存な環境は、 next や remix のようなフレームワークぐらいだろう。
+
+そもそも node だろうが deno だろうが bun だろうが workerd だろうが、常に環境依存の少ないコードを書くのを心がけるべきだと思っていて、その思想に deno が噛み合っている。
+
+Deno を使っている場所
+CLI
+WebAssemly 周りのツール
+vite でフロントエンド関連
+deno deploy で簡単なサーバーをデプロイする
+生成 AIに生成させたコードをサンドボックス付きで実行
+とくに CLI ツールを作るのに多用している。最近は openai api をラップした CLIツール を作ることが多いので、 deno で事足りている。
+
+ハイトラフィックなサーバーを deno で運用するのは流石に勇気がいるが(実例があったら知りたい)、 deno deploy のエッジサーバーにポンと置いて済むようなケースなら、むしろ手軽な部類に入る。
+
+vscode 上の設定
+Deno Enable すると .vscode/settings.json に { "deno.enable": true } が書き込まれる。
+
+既存リポジトリに突然突っ込むとさすがにうまくいかないので、色々と設定を合わせる必要はある。
+
+一番単純な運用は、ディレクトリごとに .vscode/settings.json を置いて vscode で code . -a で複数ルートで運用する。
+
+これを個別に置いていく。
+
+{
+  "deno.enable": true
+}
+
+ただ、これだと親からそのディレクトリを見た際はエラーが出てしまう。
+
+全体で deno を有効にしつつ、 node ディレクトリだけ無効にする例。
+
+{
+  "deno.enable": true,
+  "deno.disablePaths": ["./node"],
+}
+
+逆に、全体で deno を無効化につつ、 deno ディレクトリだけ有効にする例。
+
+{
+  "deno.enable": false,
+  "deno.enablePaths": ["./deno"],
+}
+
+enablePaths/disablePaths はちょっと怪しいところはあるが、一応動く。
+
+Deno で CLIツールを作る
+deno のユースケースとして一番強烈なのが、CLIツールの作成。このためにすべてのモジュールをフルパスで書いている。
+
+とにかく deno 版 zx の dax + node:util.parseArgs の組み合わせが最強。これでCLIツールは何でも作れる。
+
+OpenAI API を叩く例
+
+import { $ } from "jsr:@david/dax@0.40.0";
+import { parseArgs } from "node:util";
+import { OpenAI } from "npm:openai";
+
+const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY")! });
+const parsed = parseArgs({
+  options: {
+    message: {
+      type: "string",
+      short: "m"
+    }
+  },
+  allowPositionals: true
+});
+
+if (!parsed.values.message) Deno.exit(1);
+const response = await openai.chat.completions.create({
+  model: "gpt-4",
+  messages: [
+    { role: 'user', content: parsed.values.message }
+  ],
+});
+
+const result = response.choices[0].message.content;
+await $`echo ${result!}`;
+
+(確かちょっと前まで openai で node:stream 周りの非互換で動かなかったが、今は問題ない)
+
+直接実行してもいいし、 deno install でパーミッション付きで保存しておいてもいい。
+
+$ deno run -A run.ts
+$ deno install -Afg run.ts --name mycmd
+$ mycmd
+
+deno は 標準で dotenv 相当の機能を持っていて, --env でドットファイルを読み込める。
+
+$ echo "OPENAI_API_KEY=..." > .env
+$ deno run -A --env run_openai.ts
+
+deno をメインではない環境でも、シェルスクリプトの代わりに deno + dax でコードを書きまくっている。
+難点は使用者に deno のインストールを強いること。だから node と同じぐらい普及してほしい。
+
+Deno パーミッションの運用
+自分が書いたコードを実行するときは(つまりほとんどのケースでは) deno run -A で全許可で実行している。
+
+拾ってきたスクリプトは一応サンドボックスで実行して、都度許可を出す。
+
+$ deno run --deny-net cli.ts
+┌ ⚠️  Deno requests env access to "OPENAI_API_KEY".
+├ Run again with --allow-env to bypass this prompt.
+└ Allow? [y/n/A] (y = yes, allow; n = no, deny; A = allow all env permissions) >
+
+最近はブラックリスト方式の --deny-read 等もあるので使いやすくなった。
+
+deno permissions はとくに AI に生成させたコードを評価するのに便利で、どこの馬の骨から学んだのかわからない怪しいコードを、サンドボックスで評価できるのはだいぶ安心感がある。
+
+deno から node ライブラリを使う
+import { parseArgs } from "node:util"; // node 互換APIを呼び出す
+import prettier from "npm:prettier@2.4.1"; // 
+
+よほど低レベルなAPIを使っていない限り、今の deno なら動かすことができる。
+
+
+
+見る限り、例えば node:cluster がない。他にも node 側で追加されたAPIがないのを deno 側が認識してないことがある。そういうのは Issue を建てて、しばらくすると治っていることが多い。(いつもありがとう deno 開発チーム)
+
+vscode でリモートのモジュール名に対して、それなりに補完が効くのも Good
+
+vscode 上だと、パスを書いた瞬間はローカルにキャッシュを持ってないので、すぐには認識できない。そういうときはコマンドパレット(Mac だと Shift Command P)から Deno: Deno Cache dependencies を叩く。
+
+package.jsonと がある場合、 node_modules の下を npm プレフィックスを省いて(つまり node.js と同じ書き方で)記述できる。
+
+$ npm init -y
+$ npm i -S react
+
+import React from "react"
+
+ただ、自分は可能な限り package.json 互換モードは使わないようにしている。ローカルな状態に依存してしまって、 deno のポータブルさの旨味がなくなる。
+
+例: deno から Vite を使う
+node 互換モードを使えば、 これだけで vite が動かせる。
+
+$ echo '<script type=module src="./index.ts"></script>' > index.html
+$ echo "console.log('hello')" > index.ts
+$ deno run -A npm:vite
+
+node だと npm init -y && npm i -D vite が必要だったし、 install したときの状態に引きずられる。 deno だとそれを考えなくていい。
+
+注意点として、 vite.config.ts も deno コンテキストで動いてるため、 読み込むライブラリが deno に対応している必要がある。
+
+vite.config.mts
+import { defineConfig } from 'npm:vite'
+import { svelte } from 'npm:@sveltejs/vite-plugin-svelte'
+import 'npm:svelte'
+
+export default defineConfig({
+  plugins: [svelte()]
+});
+
+当然だがビルドされる側のコードは deno プロセスではないため、通常のフロントエンドコードとして記述する必要がある。
+
+Vite から見たフロントエンドのコードを deno っぽく見せるために、 allowImportingTsExtensions を有効にしておく。
+
+{
+  "compilerOptions": {
+    "module": "ESNext",
+    "target": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  }
+}
+
+これで import { x } from "./desp.ts" と拡張子付きで import を宣言、ビルドできるようになる。
+
++ React JSX
+vscode で deno-lsp 側から見た時、 JSX のコードが動いてるように見えるための設定が必要になる。
+
+さすがにここからは npm 互換モードで package.json に頼ることにする。
+
+$ pnpm init
+$ pnpm add react react-dom @types/react @types/react-dom -D
+
+これで import {createRoot} from "react-dom/client" のようなコードが deno 側から認識できる。
+
+JSX の辻褄を合わせる。
+
+deno.jsonc
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "npm:react",
+    "lib": ["deno.ns", "deno.unstable", "dom", "esnext"]
+  }
+}
+
+実際に vite は node_modules からモジュールを解決するので、いずれにせよ node_modules は必要。これをなくすためには deno 互換の vite プラグインが必要になる。これは後回し。
+
+この設定でランタイムコードを書いていく。
+
+// 型を読み込ませるための空のimport。一回だけでいい。
+import type { } from "npm:@types/react"
+import { createRoot } from "npm:react-dom/client";
+
+function App() {
+  return <div>
+    App
+  </div>
+}
+
+createRoot(document.querySelector("#root")!).render(
+  <App />
+)
+
+vscode が deno.enable の状態で、これが動いてるように見える。というか実際動く。
+
+deno publish で jsr.io にパブリッシュする
+jsr.io は deno の新しいパッケージレジストリ。 (今後 deno.land/x/ は使わない、でいいのかな?)
+
+deno publish は次のような deno.json(c) を見てライブラリを公開することができる。
+
+{
+  "name": "@mizchi/tpl",
+  "version": "0.0.3",
+  "exports": "./mod.ts",
+}
+
+$ deno publish
+
+叩くとブラウザで jsr.io に飛ばされて、WebUIで許可ボタンを押させるのがかっこいい。
+
+dnt で npm / jsr のデュアルパッケージを作る
+Dnt は Deno で書いたコードを node 用に変換する
+
+
+
+こういうスクリプトを書く
+
+import { build, emptyDir } from "@deno/dnt";
+import denoJson from "./deno.json" with { type: "json" };
+await emptyDir("./npm");
+await build({
+  entryPoints: ["./mod.ts"],
+  outDir: "./npm",
+  shims: { deno: true },
+  package: {
+    name: denoJson.name,
+    version: denoJSon.version,
+    license: "MIT",
+  }
+});
+
+これを実行すると、 npm/ の下に node 用に変換されたモジュールができる。あとはこれを npm publish するだけ。
+
+zdnt
+で、 dnt をラップした CLI ツールを作った。細かいオプションは決め打ちだが、 mod.ts をエントリポイントとして jsr.io と npm 両方に publish する。
+
+# jsr.io が CLI に未対応なので、 GitHub から直接インストール
+$ deno install -Afg https://raw.githubusercontent.com/mizchi/misc/main/zdnt/zdnt.ts
+$ zdnt release -y
+# mod.ts を dnt でビルド
+# deno.jsonc に次のバージョンを書き込む
+# deno publish
+# cd npm && npm publish --access public
+
+簡単な scaffold も作った。
+
+$ zdnt new myapp -u mizchi
+$ tree . -a      
+.
+├── .gitignore
+├── .vscode
+│   └── settings.json
+├── README.md
+├── deno.jsonc
+├── mod.test.ts
+└── mod.ts
+
+Deno で WebAssembly の実行
+node.js で WebAssembly を動かすのはちょっと手間で、専用の初期化処理を行ったりする必要があるのだが、 deno はブラウザと同じコードで .wasm が読み込める。
+
+const { instance } = await WebAssembly.instantiateStreaming(
+  fetch(new URL("./add.wasm", import.meta.url)),
+  { }
+);
+const exports = instance.exports as any;
+exports._start();
+
+wasm のモジュールを開発しているとき、わざわざブラウザ上で確認するのが面倒なので、だいたい deno で動作確認をしている。実際に v8 が動いているのでブラウザ上の WebAssembly と大きな差はない。(バージョン差はある)
+
+Deno Deploy にサーバーをデプロイ
+という話を書こうと思ったが、別に deno deploy を解説したいわけではないので、詳しくは公式ドキュメントを読んでください。
+
+
+
+Deno.serve(() => new Response("Hello, world!"));
+
+$ deployctl deploy --entrypoint=server.ts --token=...
+
+ローカルでもそのまま deno run で動かせるのが嬉しく、この手のサービスにありがちな、デプロイしないと挙動を確認できない、といったものはない。とはいえ kv 周りはさすがにエミュレータ。
+
+使い込んでないので信頼性は知らない。雑に作ったおもちゃをデプロイするのに便利。
+
+おわり
+というわけで、今なら Deno は現実的に運用可です。ゴー
