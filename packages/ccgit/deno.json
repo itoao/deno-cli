@@ -1,0 +1,5 @@
+{
+  "name": "@deno-cli/ccgit",
+  "version": "0.1.0",
+  "exports": "./main.ts"
+}
