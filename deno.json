@@ -9,8 +9,10 @@
     "test:all": "deno test",
     "gclm": "deno task --filter \"@deno-cli/gclm\" run",
     "gclm:test": "deno task --filter \"@deno-cli/gclm\" test",
-    "gclm:install": "deno task --filter \"@deno-cli/gclm\" install",
-    "ccgit": "deno task --filter \"@deno-cli/ccgit\" run"
+    "gclm:i": "deno task --filter \"@deno-cli/gclm\" install",
+    "ccgit": "deno task --filter \"@deno-cli/ccgit\" run",
+    "ccgit:test": "deno task --filter \"@deno-cli/ccgit\" test",
+    "ccgit:i": "deno task --filter \"@deno-cli/ccgit\" install"
   },
   "compilerOptions": {
     "lib": ["deno.ns", "deno.unstable", "esnext", "dom"]

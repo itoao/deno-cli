@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "exports": "./main.ts",
   "tasks": {
-    "run": "deno run --allow-net --allow-env --allow-read --allow-run main.ts"
+    "run": "deno run --allow-net --allow-env --allow-read --allow-run main.ts",
+    "install": "deno install -g --allow-net --allow-env --allow-read --allow-run --force -n ccgit ./main.ts",
+    "test": "deno test --allow-all main.ts"
   }
 }
