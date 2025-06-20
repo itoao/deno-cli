@@ -3,19 +3,113 @@ import { $ } from "jsr:@david/dax@0.40.0";
 import * as git from "./git.ts";
 import { parseClaudeOutput } from "./metadata.ts";
 import { generateCommitTitle } from "./title-generator.ts";
+import { checkoutSession, startSession, listSessions } from "./history.ts";
 import type { ClaudeOutput } from "./types.ts";
 
-async function runClaude(args: string[]): Promise<ClaudeOutput> {
+let taskCounter = 0;
+
+async function checkForTaskCompletion(chunk: string): Promise<void> {
+  // Patterns that indicate Claude Code completed a task
+  const completionPatterns = [
+    /The file .* has been updated/,
+    /File created successfully/,
+    /✅/,
+    /Command completed successfully/,
+    /Test passed/,
+    /Build successful/,
+    /Successfully/,
+  ];
+  
+  const shouldCommit = completionPatterns.some(pattern => pattern.test(chunk));
+  
+  if (shouldCommit) {
+    try {
+      taskCounter++;
+      
+      // Check if there are changes to commit
+      const hasChanges = await git.hasUncommittedChanges();
+      if (!hasChanges) return;
+      
+      // Generate commit message
+      const changedFiles = await git.getStagedFiles();
+      const sessionId = `task-${Date.now()}-${taskCounter}`;
+      const metadata = {
+        sessionId,
+        timestamp: new Date().toISOString(),
+        prompt: `Task ${taskCounter} completion`,
+        resumedFrom: undefined,
+      };
+      
+      const title = generateCommitTitle(changedFiles, metadata);
+      
+      // Commit the changes
+      await git.commitChanges(title, metadata);
+      
+      console.log(`\n🎯 Auto-committed task ${taskCounter}`);
+    } catch (error) {
+      console.error(`Failed to auto-commit: ${error}`);
+    }
+  }
+}
+
+async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
   try {
-    const result = await $`claude ${args}`;
+    const cmd = new Deno.Command("claude", {
+      args: args,
+      stdout: "piped",
+      stderr: "piped",
+      stdin: "inherit",
+    });
+    
+    const process = cmd.spawn();
+    
+    let stdout = "";
+    let stderr = "";
+    
+    // Monitor stdout for task completion patterns
+    const stdoutReader = process.stdout.getReader();
+    const stderrReader = process.stderr.getReader();
+    
+    const decoder = new TextDecoder();
+    
+    // Read stdout chunks
+    const readStdout = async () => {
+      while (true) {
+        const { done, value } = await stdoutReader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        stdout += chunk;
+        Deno.stdout.write(value); // Pass through to terminal
+        
+        // Check for task completion indicators
+        await checkForTaskCompletion(chunk);
+      }
+    };
+    
+    // Read stderr chunks  
+    const readStderr = async () => {
+      while (true) {
+        const { done, value } = await stderrReader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        stderr += chunk;
+        Deno.stderr.write(value); // Pass through to terminal
+      }
+    };
+    
+    // Run both readers concurrently
+    await Promise.all([readStdout(), readStderr()]);
+    
+    const status = await process.status;
     
     return {
-      stdout: result.stdout || '',
-      stderr: result.stderr || '',
-      exitCode: result.code,
+      stdout,
+      stderr,
+      exitCode: status.code,
     };
   } catch (error) {
-    // If claude command fails, return error info
     return {
       stdout: '',
       stderr: error instanceof Error ? error.message : String(error),
@@ -38,21 +132,19 @@ async function handleClaudeSession(args: string[]): Promise<void> {
   const hasStashed = await git.stashChanges();
   
   try {
-    // Run Claude
-    console.log("🚀 Starting Claude session...");
-    const output = await runClaude(args);
+    // Run Claude with real-time monitoring
+    console.log("🚀 Starting Claude session with auto-commit...");
+    const output = await runClaudeWithMonitoring(args);
     
-    // Extract metadata
-    const metadata = parseClaudeOutput(output, args);
-    
-    // Generate commit title based on changes
-    const changedFiles = await git.getStagedFiles();
-    const title = generateCommitTitle(changedFiles, metadata);
-    
-    // Commit changes
-    await git.commitChanges(title, metadata);
-    
-    console.log(`\n✅ Session saved with ID: ${metadata.sessionId}`);
+    // Final commit for any remaining changes
+    const hasChanges = await git.hasUncommittedChanges();
+    if (hasChanges) {
+      const metadata = parseClaudeOutput(output, args);
+      const changedFiles = await git.getStagedFiles();
+      const title = generateCommitTitle(changedFiles, metadata);
+      await git.commitChanges(title, metadata);
+      console.log(`\n✅ Final session commit with ID: ${metadata.sessionId}`);
+    }
     
     // Exit with Claude's exit code
     Deno.exit(output.exitCode);
@@ -64,38 +156,23 @@ async function handleClaudeSession(args: string[]): Promise<void> {
   }
 }
 
-async function handleCheckout(sessionId: string): Promise<void> {
-  const commits = await git.getCommitsBySessionId(sessionId);
-  
-  if (commits.length === 0) {
-    console.error(`❌ No commits found for session ID: ${sessionId}`);
-    Deno.exit(1);
-  }
-  
-  // Checkout the first (most recent) commit
-  await git.checkoutCommit(commits[0]);
-  console.log(`✅ Checked out session: ${sessionId}`);
-}
-
-async function handleStart(name: string): Promise<void> {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const branchName = `claude/${name}-${timestamp}`;
-  
-  await git.createBranch(branchName);
-  console.log(`✅ Created branch: ${branchName}`);
-}
 
 async function main() {
   const args = Deno.args;
   
   // Handle ccgit-specific commands
   if (args[0] === 'checkout' && args[1]) {
-    await handleCheckout(args[1]);
+    await checkoutSession(args[1]);
     return;
   }
   
   if (args[0] === 'start' && args[1]) {
-    await handleStart(args[1]);
+    await startSession(args[1]);
+    return;
+  }
+  
+  if (args[0] === 'list') {
+    await listSessions();
     return;
   }
   
@@ -107,6 +184,7 @@ Usage:
   ccgit [claude options]        Run Claude with automatic git tracking
   ccgit checkout <session-id>   Checkout a previous session
   ccgit start <name>           Create a new branch for a session
+  ccgit list                   List recent Claude sessions
   
 Examples:
   ccgit                        Start interactive Claude session
@@ -114,6 +192,7 @@ Examples:
   ccgit --resume abc123        Resume a Claude session
   ccgit checkout abc123        Restore code from session abc123
   ccgit start feature-auth     Create branch claude/feature-auth-<timestamp>
+  ccgit list                   Show recent sessions
 `);
     return;
   }
