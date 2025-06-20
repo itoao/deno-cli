@@ -36,17 +36,14 @@ async function checkForTaskCompletion(chunk: string): Promise<void> {
     /\[0m\[32mCheck\[0m/,  // Deno check success pattern
   ];
   
-  // Debug logging
-  if (chunk.trim()) {
-    console.log(`[DEBUG] Chunk: ${JSON.stringify(chunk.substring(0, 100))}`);
-  }
+  // Debug logging (disabled for cleaner output)
+  // if (chunk.trim()) {
+  //   console.log(`[DEBUG] Chunk: ${JSON.stringify(chunk.substring(0, 100))}`);
+  // }
   
   const shouldCommit = completionPatterns.some(pattern => pattern.test(chunk));
   
   if (shouldCommit) {
-    console.log(`[DEBUG] Commit triggered by pattern match`);
-    console.log(`[DEBUG] Chunk content: ${JSON.stringify(chunk.substring(0, 200))}`);
-  
     // Add debouncing to prevent too many commits
     const now = Date.now();
     if (taskCounter === 0 || (now - lastCommitTime) > 5000) {
