@@ -89,7 +89,7 @@ async function checkForTaskCompletion(chunk: string): Promise<void> {
         })
       );
       
-      const title = generateCommitTitleWithAI(filesWithDiff, metadata);
+      const title = `Claude Chat Session: ${metadata.sessionId}`;
       
       // Commit the changes
       await git.commitChanges(title, metadata);
@@ -137,7 +137,7 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
           return { ...file, diff };
         })
       );
-      const title = generateCommitTitleWithAI(filesWithDiff, metadata);
+      const title = `Claude Chat Session: ${metadata.sessionId}`;
       await git.commitChanges(title, metadata);
       lastCommitTime = Date.now();
       console.log(`\n🎯 Auto-committed by fswatch`);
@@ -335,7 +335,7 @@ async function handleClaudeSession(args: string[]): Promise<void> {
             })
           );
           
-          const title = generateCommitTitleWithAI(filesWithDiff, metadata);
+          const title = `Claude Chat Session: ${metadata.sessionId}`;
           await git.commitChanges(title, metadata);
           console.log(`\n✅ Final interactive session commit with ID: ${metadata.sessionId}`);
         }
@@ -376,7 +376,7 @@ async function handleClaudeSession(args: string[]): Promise<void> {
           })
         );
         
-        const title = generateCommitTitleWithAI(filesWithDiff, metadata);
+        const title = `Claude Chat Session: ${metadata.sessionId}`;
         await git.commitChanges(title, metadata);
         console.log(`\n✅ Final session commit with ID: ${metadata.sessionId}`);
       }
