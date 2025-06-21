@@ -3,7 +3,7 @@ import { $ } from "jsr:@david/dax@0.40.0";
 import * as git from "./git.ts";
 import { parseClaudeOutput } from "./metadata.ts";
 // import { generateCommitTitle as generateCommitTitleWithAI, type GitFileChange as SharedGitFileChange } from "@deno-cli/shared";
-import { generateCommitTitle as generateCommitTitleWithAI } from "./title-generator.ts";
+// import { generateCommitTitle as generateCommitTitleWithAI } from "./title-generator.ts";
 
 type SharedGitFileChange = {
   path: string;
