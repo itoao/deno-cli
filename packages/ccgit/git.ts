@@ -56,7 +56,6 @@ export async function getStagedFiles(): Promise<GitFileChange[]> {
 }
 
 export async function commitChanges(
-  title: string,
   metadata: SessionMetadata
 ): Promise<void> {
   try {
