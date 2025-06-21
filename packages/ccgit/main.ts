@@ -281,11 +281,8 @@ async function handleClaudeSession(args: string[]): Promise<void> {
   // Interactive mode: no args or only --dangerously-skip-permissions
   const isInteractiveMode = !hasOtherArgs;
   
-  // Prepare claude args: always add --dangerously-skip-permissions if not present
+  // Pass through all arguments as-is to claude
   const claudeArgs = [...args];
-  if (!claudeArgs.includes('--dangerously-skip-permissions')) {
-    claudeArgs.push('--dangerously-skip-permissions');
-  }
   
   // Debug logging
   console.log(`🔍 Debug: isInteractiveMode=${isInteractiveMode}, claudeArgs=${JSON.stringify(claudeArgs)}`);
