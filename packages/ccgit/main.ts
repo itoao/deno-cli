@@ -267,9 +267,9 @@ async function handleClaudeSession(args: string[]): Promise<void> {
     delete env.CLAUDE_CODE_ENTRYPOINT;
     
     if (args.length === 0) {
-      await $`claude`.env(env).spawn();
+      await $`yolo`.env(env).spawn();
     } else {
-      await $`claude ${args}`.env(env).spawn();
+      await $`yolo ${args}`.env(env).spawn();
     }
     return;
   }
