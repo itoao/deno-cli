@@ -177,7 +177,7 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
     const isInteractiveCall = filteredArgs.length === 0 || 
       (filteredArgs.length === 1 && filteredArgs[0] === '--dangerously-skip-permissions');
     
-    const cmd = new Deno.Command("claude", {
+    const cmd = new Deno.Command("yolo", {
       args: filteredArgs,
       stdout: isInteractiveCall ? "inherit" : "piped",
       stderr: isInteractiveCall ? "inherit" : "piped", 
