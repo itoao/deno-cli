@@ -329,7 +329,7 @@ async function main() {
   
   // Handle help
   if (args.includes('--help') || args.includes('-h')) {
-    showHelp();
+    await showHelp();
     return;
   }
   
