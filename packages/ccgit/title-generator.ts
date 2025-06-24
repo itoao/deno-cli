@@ -1,4 +1,4 @@
-import type { GitFileChange, SessionMetadata } from "./types.ts";
+import type { GitFileChange, SessionMetadata } from "../../shared/types.ts";
 
 // Simplified version of gclm's title generation
 // TODO: Later integrate with LLM for smarter titles
