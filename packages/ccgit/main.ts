@@ -294,7 +294,7 @@ Claude CLI Options (all passed through transparently):
     if (!optionsFound) {
       console.log("  (Run 'claude --help' for complete Claude CLI options)");
     }
-  } catch (error) {
+  } catch (_error) {
     console.log("  (Run 'claude --help' for complete Claude CLI options)");
   }
 }
