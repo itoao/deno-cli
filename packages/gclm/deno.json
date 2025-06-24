@@ -5,6 +5,6 @@
   "tasks": {
     "run": "deno run --allow-net --allow-env --allow-read --allow-run main.ts",
     "install": "deno install -g --allow-net --allow-env --allow-read --allow-run --force -n gclm ./main.ts",
-    "test": "deno test --allow-all main.ts"
+    "test": "deno test --allow-all *.test.ts"
   }
 }
