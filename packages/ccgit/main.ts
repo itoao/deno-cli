@@ -56,7 +56,9 @@ async function commitFileChanges(metadata: {
         } else {
           diff = await git.getFileDiff(file.path);
         }
-      } catch {}
+      } catch {
+        // Ignore diff read errors, use empty diff
+      }
       return { ...file, diff };
     }),
   );
@@ -180,7 +182,7 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
   const fileWatcher = createFileWatcher();
 
   // Start file watching in background
-  const watchPromise = watchFileChanges(fileWatcher);
+  const _watchPromise = watchFileChanges(fileWatcher);
 
   try {
     const env = cleanEnvironment();
