@@ -28,3 +28,14 @@ export {
   hasChangesToCommit,
   createCommit
 } from "./git-operations.ts";
+
+export {
+  handleError,
+  withErrorHandling,
+  withSyncErrorHandling,
+  handleGitError,
+  warn,
+  rethrowError,
+  AppError,
+  type ErrorHandlerOptions
+} from "./error-handler.ts";
