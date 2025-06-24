@@ -2,6 +2,7 @@
 import { $ } from "jsr:@david/dax@0.40.0";
 import * as git from "./git.ts";
 import type { ClaudeOutput } from "../../shared/types.ts";
+import { handleError } from "../../shared/error-handler.ts";
 
 // Constants
 const DEBOUNCE_DELAY = 500;
@@ -185,9 +186,10 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
     return output;
   } catch (error) {
     fileWatcher.watcherActive = false;
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return {
       stdout: '',
-      stderr: error instanceof Error ? error.message : String(error),
+      stderr: errorMessage,
       exitCode: 1,
     };
   }
@@ -226,7 +228,7 @@ async function handleClaudeSession(args: string[]): Promise<void> {
       console.log(`ℹ️  Or run 'claude' directly to test Claude CLI`);
       console.log(`ℹ️  Args passed to claude: ${JSON.stringify(args)}`);
     } else {
-      console.error('Error running Claude session:', error);
+      handleError(error, { prefix: 'Error running Claude session', exitCode: 1 });
     }
     Deno.exit(1);
   }
