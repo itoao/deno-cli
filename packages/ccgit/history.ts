@@ -33,7 +33,7 @@ export async function startSession(name: string): Promise<void> {
 
 export async function listSessions(): Promise<void> {
   try {
-    const result = await $`git log --grep="Session-ID:" --format="%H|%B|%ai" --reverse`.text();
+    const result = await $`git log --grep="Session-ID:" --format="%H|%ai|%B" --reverse`.text();
     const commits = result.trim().split('\n\n').filter(Boolean);
     
     if (commits.length === 0) {
@@ -47,7 +47,7 @@ export async function listSessions(): Promise<void> {
     for (const commit of commits.slice(-10)) { // Show last 10 sessions
       const lines = commit.split('\n');
       const [hashDateLine] = lines;
-      const [hash, , date] = hashDateLine.split('|');
+      const [hash, date] = hashDateLine.split('|', 2);
       const body = lines.slice(1).join('\n');
       const sessionIdMatch = body.match(/Session-ID: ([^\s\n]+)/);
       const sessionId = sessionIdMatch ? sessionIdMatch[1] : 'unknown';
