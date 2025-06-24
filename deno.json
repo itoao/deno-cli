@@ -16,7 +16,10 @@
     "gclm:i": "deno task --filter \"@deno-cli/gclm\" install",
     "ccgit": "deno task --filter \"@deno-cli/ccgit\" run",
     "ccgit:test": "deno task --filter \"@deno-cli/ccgit\" test",
-    "ccgit:i": "deno task --filter \"@deno-cli/ccgit\" install"
+    "ccgit:i": "deno task --filter \"@deno-cli/ccgit\" install",
+    "ccarg": "deno task --filter \"@deno-cli/ccarg\" run",
+    "ccarg:test": "deno task --filter \"@deno-cli/ccarg\" test",
+    "ccarg:i": "deno task --filter \"@deno-cli/ccarg\" install"
   },
   "compilerOptions": {
     "lib": ["deno.ns", "deno.unstable", "esnext", "dom"]
