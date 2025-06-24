@@ -15,10 +15,8 @@
     "jsr:@std/path@0.221.0": "0.221.0",
     "jsr:@std/streams@0.221.0": "0.221.0",
     "npm:@anthropic-ai/claude-code@*": "1.0.33",
-    "npm:@anthropic-ai/claude-code@^1.0.33": "1.0.33",
     "npm:@types/node@*": "22.15.15",
     "npm:ora@*": "8.2.0",
-    "npm:ora@^8.2.0": "8.2.0",
     "npm:vitest@*": "3.2.4_vite@6.3.5__picomatch@4.0.2_@types+node@22.15.15"
   },
   "jsr": {
@@ -978,13 +976,8 @@
     "dependencies": [
       "jsr:@std/assert@1",
       "npm:@anthropic-ai/claude-code@*",
+      "npm:ora@*",
       "npm:vitest@*"
-    ],
-    "packageJson": {
-      "dependencies": [
-        "npm:@anthropic-ai/claude-code@^1.0.33",
-        "npm:ora@^8.2.0"
-      ]
-    }
+    ]
   }
 }
