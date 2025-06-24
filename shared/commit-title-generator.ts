@@ -1,4 +1,4 @@
-import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code";
+import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code@1.0.33";
 import type { GitFileChange } from "./types.ts";
 import { warn } from "./error-handler.ts";
 
