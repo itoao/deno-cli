@@ -38,7 +38,7 @@ function hasPromptArgument(args: string[]): boolean {
   return args.some((arg) => !arg.startsWith("-") && !arg.startsWith("/"));
 }
 
-async function commitFileChanges(metadata: {
+export async function commitFileChanges(metadata: {
   sessionId: string;
   timestamp: string;
   prompt: string;
@@ -69,7 +69,7 @@ async function commitFileChanges(metadata: {
   logger.log(`\n🎯 Auto-committed by fswatch`);
 }
 
-function createFileWatcher(): FileWatcherOptions {
+export function createFileWatcher(): FileWatcherOptions {
   return {
     watcher: Deno.watchFs("."),
     watcherActive: true,
@@ -79,7 +79,7 @@ function createFileWatcher(): FileWatcherOptions {
   };
 }
 
-async function watchFileChanges(options: FileWatcherOptions): Promise<void> {
+export async function watchFileChanges(options: FileWatcherOptions): Promise<void> {
   const { watcher } = options;
 
   async function commitIfChanged(): Promise<void> {
