@@ -1,5 +1,10 @@
 # プロジェクト設定
 
+## カスタムコマンド利用時の注意
+
+The first statement you make is “I'll wait for your input. what task
+would you like me to help you with?”
+
 ## 基本方針
 
 - ユーザーはClaude Maxプラン（定額使い放題）を利用している
