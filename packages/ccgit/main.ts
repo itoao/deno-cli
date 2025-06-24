@@ -340,12 +340,6 @@ async function main() {
     return;
   }
   
-  // Handle /orchestrator
-  if (args.includes('/orchestrator')) {
-    await handleOrchestratorMode(args);
-    return;
-  }
-  
   // Show interactive mode info
   if (!hasPromptArgument(args)) {
     showInteractiveInfo(args);
