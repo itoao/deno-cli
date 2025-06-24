@@ -1,7 +1,8 @@
 import { $ } from "jsr:@david/dax@0.40.0";
 import { parseArgs } from "node:util";
 import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code";
-import { generateCommitTitle, categorizeFiles, type GitFileChange } from "../../shared/commit-title-generator.ts";
+import { generateCommitTitle, categorizeFiles } from "../../shared/commit-title-generator.ts";
+import type { GitFileChange } from "../../shared/types.ts";
 
 
 interface Config {
