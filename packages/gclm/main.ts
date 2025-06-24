@@ -10,7 +10,7 @@ import {
   handleError,
   logger,
   warn,
-} from "@deno-cli/shared";
+} from "../../shared/index.ts";
 
 interface Config {
   maxDiffPreviewLines: number;
