@@ -4,149 +4,188 @@ import * as git from "./git.ts";
 import { checkoutSession, startSession, listSessions } from "./history.ts";
 import type { ClaudeOutput } from "./types.ts";
 
+// Constants
+const DEBOUNCE_DELAY = 500;
+const MIN_COMMIT_INTERVAL = 400;
+const CLAUDE_ENV_VARS = ["CLAUDECODE", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_ENTRYPOINT"];
 
-async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
-  // Claudeプロセス実行中にファイル変更を監視し、変更があれば即コミット
-  const watcher = Deno.watchFs(".");
-  let watcherActive = true;
-  let commitInProgress = false;
-  let lastCommitTime = 0;
-  let changeBuffer = false;
+interface FileWatcherOptions {
+  watcher: Deno.FsWatcher;
+  watcherActive: boolean;
+  commitInProgress: boolean;
+  lastCommitTime: number;
+  changeBuffer: boolean;
+}
 
-  // コミット処理
+interface ClaudeProcessOptions {
+  args: string[];
+  isInteractive: boolean;
+  env: Record<string, string>;
+}
+
+function cleanEnvironment(): Record<string, string> {
+  const env = { ...Deno.env.toObject() };
+  CLAUDE_ENV_VARS.forEach(varName => delete env[varName]);
+  return env;
+}
+
+function hasPromptArgument(args: string[]): boolean {
+  return args.some(arg => !arg.startsWith('-'));
+}
+
+async function commitFileChanges(metadata: {
+  sessionId: string;
+  timestamp: string;
+  prompt: string;
+  resumedFrom: undefined;
+}): Promise<void> {
+  const hasChanges = await git.hasUncommittedChanges();
+  if (!hasChanges) return;
+
+  const changedFiles = await git.getStagedFiles();
+  await Promise.all(
+    changedFiles.map(async (file) => {
+      let diff = '';
+      try {
+        if (file.status === 'A') {
+          diff = await git.getFileContent(file.path);
+        } else {
+          diff = await git.getFileDiff(file.path);
+        }
+      } catch {}
+      return { ...file, diff };
+    })
+  );
+
+  const title = `Claude Chat Session: ${metadata.sessionId}`;
+  await git.commitChanges(title, metadata);
+  console.log(`\n🎯 Auto-committed by fswatch`);
+}
+
+function createFileWatcher(): FileWatcherOptions {
+  return {
+    watcher: Deno.watchFs("."),
+    watcherActive: true,
+    commitInProgress: false,
+    lastCommitTime: 0,
+    changeBuffer: false,
+  };
+}
+
+async function watchFileChanges(options: FileWatcherOptions): Promise<void> {
+  const { watcher } = options;
+
   async function commitIfChanged() {
-    if (commitInProgress) return;
-    commitInProgress = true;
+    if (options.commitInProgress) return;
+    options.commitInProgress = true;
+    
     try {
-      const hasChanges = await git.hasUncommittedChanges();
-      if (!hasChanges) return;
-      const changedFiles = await git.getStagedFiles();
       const metadata = {
         sessionId: `fswatch-${Date.now()}`,
         timestamp: new Date().toISOString(),
         prompt: "Claude code file change detected",
         resumedFrom: undefined,
       };
-      await Promise.all(
-        changedFiles.map(async (file) => {
-          let diff = '';
-          try {
-            if (file.status === 'A') {
-              diff = await git.getFileContent(file.path);
-            } else {
-              diff = await git.getFileDiff(file.path);
-            }
-          } catch {}
-          return { ...file, diff };
-        })
-      );
-      const title = `Claude Chat Session: ${metadata.sessionId}`;
-      await git.commitChanges(title, metadata);
-      lastCommitTime = Date.now();
-      console.log(`\n🎯 Auto-committed by fswatch`);
+      await commitFileChanges(metadata);
+      options.lastCommitTime = Date.now();
     } finally {
-      commitInProgress = false;
+      options.commitInProgress = false;
     }
   }
 
-  // ファイル監視ループ（デバウンス付き）
-  (async () => {
-    for await (const event of watcher) {
-      if (!watcherActive) break;
-      if (["modify", "create", "remove"].includes(event.kind)) {
-        changeBuffer = true;
-        // 500msデバウンス
-        setTimeout(async () => {
-          if (changeBuffer && Date.now() - lastCommitTime > 400) {
-            changeBuffer = false;
-            await commitIfChanged();
-          }
-        }, 500);
-      }
+  for await (const event of watcher) {
+    if (!options.watcherActive) break;
+    if (["modify", "create", "remove"].includes(event.kind)) {
+      options.changeBuffer = true;
+      setTimeout(async () => {
+        if (options.changeBuffer && Date.now() - options.lastCommitTime > MIN_COMMIT_INTERVAL) {
+          options.changeBuffer = false;
+          await commitIfChanged();
+        }
+      }, DEBOUNCE_DELAY);
     }
-  })();
+  }
+}
+
+async function runClaudeProcess(options: ClaudeProcessOptions): Promise<ClaudeOutput> {
+  const cmd = new Deno.Command("claude", {
+    args: options.args,
+    stdout: options.isInteractive ? "inherit" : "piped",
+    stderr: options.isInteractive ? "inherit" : "piped",
+    stdin: "inherit",
+    env: options.env,
+  });
+
+  const process = cmd.spawn();
+
+  if (options.isInteractive) {
+    const status = await process.status;
+    return {
+      stdout: "",
+      stderr: "",
+      exitCode: status.code,
+    };
+  }
+
+  // Non-interactive mode: capture output
+  const [stdout, stderr] = await Promise.all([
+    readStream(process.stdout, true),
+    readStream(process.stderr, false),
+  ]);
+
+  const status = await process.status;
+  
+  return {
+    stdout,
+    stderr,
+    exitCode: status.code,
+  };
+}
+
+async function readStream(stream: ReadableStream<Uint8Array>, toStdout: boolean): Promise<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let result = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    
+    const chunk = decoder.decode(value);
+    result += chunk;
+    
+    if (toStdout) {
+      Deno.stdout.write(value);
+    } else {
+      Deno.stderr.write(value);
+    }
+  }
+
+  return result;
+}
+
+async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
+  const fileWatcher = createFileWatcher();
+  
+  // Start file watching in background
+  const watchPromise = watchFileChanges(fileWatcher);
 
   try {
-    // Filter out --print flag if no prompt is provided and stdin is empty
-    const filteredArgs = [...args];
+    const env = cleanEnvironment();
+    const isInteractive = !hasPromptArgument(args);
     
-    // Clear Claude Code specific environment variables to prevent automatic --print mode
-    const env = { ...Deno.env.toObject() };
-    delete env.CLAUDECODE;
-    delete env.CLAUDE_CODE_SSE_PORT;
-    delete env.CLAUDE_CODE_ENTRYPOINT;
-    
-    // For interactive mode (no prompt provided), don't use --print mode
-    const hasPromptArg = filteredArgs.some(arg => !arg.startsWith('-'));
-    const isInteractiveCall = !hasPromptArg;
-    
-    const cmd = new Deno.Command("claude", {
-      args: filteredArgs,
-      stdout: isInteractiveCall ? "inherit" : "piped",
-      stderr: isInteractiveCall ? "inherit" : "piped", 
-      stdin: "inherit", // Always inherit stdin for interactive support
-      env: env,
+    const output = await runClaudeProcess({
+      args,
+      isInteractive,
+      env,
     });
+
+    // Stop file watcher
+    fileWatcher.watcherActive = false;
     
-    const process = cmd.spawn();
-    
-    let stdout = "";
-    let stderr = "";
-    
-    if (isInteractiveCall) {
-      // For interactive mode, just wait for completion without monitoring
-      const status = await process.status;
-      return {
-        stdout: "",
-        stderr: "",
-        exitCode: status.code,
-      };
-    } else {
-      // For non-interactive mode, monitor output for auto-commit
-      // Monitor stdout for task completion patterns
-      const stdoutReader = process.stdout.getReader();
-      const stderrReader = process.stderr.getReader();
-      
-      const decoder = new TextDecoder();
-      
-      // Read stdout chunks
-      const readStdout = async () => {
-        while (true) {
-          const { done, value } = await stdoutReader.read();
-          if (done) break;
-          const chunk = decoder.decode(value);
-          stdout += chunk;
-          Deno.stdout.write(value); // Pass through to terminal
-        }
-      };
-      
-      // Read stderr chunks  
-      const readStderr = async () => {
-        while (true) {
-          const { done, value } = await stderrReader.read();
-          if (done) break;
-          
-          const chunk = decoder.decode(value);
-          stderr += chunk;
-          Deno.stderr.write(value); // Pass through to terminal
-        }
-      };
-      
-      // Run both readers concurrently
-      await Promise.all([readStdout(), readStderr()]);
-      
-      const status = await process.status;
-      
-      // Claudeプロセス終了時にwatcherを停止
-      watcherActive = false;
-      
-      return {
-        stdout,
-        stderr,
-        exitCode: status.code,
-      };
-    }
+    return output;
   } catch (error) {
+    fileWatcher.watcherActive = false;
     return {
       stdout: '',
       stderr: error instanceof Error ? error.message : String(error),
@@ -155,6 +194,15 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
   }
 }
 
+async function runClaudeDirectly(args: string[]): Promise<void> {
+  const env = cleanEnvironment();
+  
+  if (args.length === 0) {
+    await $`claude`.env(env).spawn();
+  } else {
+    await $`claude ${args}`.env(env).spawn();
+  }
+}
 
 async function handleClaudeSession(args: string[]): Promise<void> {
   // Check if we're in a git repo
@@ -162,97 +210,31 @@ async function handleClaudeSession(args: string[]): Promise<void> {
     await git.getGitRoot();
   } catch {
     // Not a git repo, just run claude normally
-    // Clear Claude Code specific environment variables to prevent automatic --print mode
-    const env = { ...Deno.env.toObject() };
-    delete env.CLAUDECODE;
-    delete env.CLAUDE_CODE_SSE_PORT;
-    delete env.CLAUDE_CODE_ENTRYPOINT;
-    
-    if (args.length === 0) {
-      await $`claude`.env(env).spawn();
-    } else {
-      await $`claude ${args}`.env(env).spawn();
-    }
+    await runClaudeDirectly(args);
     return;
   }
-  
-  // Handle --dangerously-skip-permissions properly
-  const hasDangerouslySkipOnly = args.length === 1 && args[0] === '--dangerously-skip-permissions';
-  
-  // Check if we have a prompt argument (non-option argument)
-  const hasPromptArg = args.some(arg => !arg.startsWith('-'));
-  
-  // Interactive mode: no prompt argument provided
-  // Examples of interactive mode:
-  // - ccgit
-  // - ccgit --dangerously-skip-permissions
-  // - ccgit -c
-  // - ccgit --continue
-  // - ccgit --model opus
-  // Examples of non-interactive mode:
-  // - ccgit "Fix the bug"
-  // - ccgit -c "Continue fixing"
-  const isInteractiveMode = !hasPromptArg;
-  
-  // Pass through all arguments as-is to claude
-  const claudeArgs = [...args];
+
+  const isInteractiveMode = !hasPromptArgument(args);
   
   try {
-    // Run Claude with real-time monitoring
     console.log("🚀 Starting Claude session with auto-commit...");
-    // isInteractiveMode is already determined above
-    
-    if (isInteractiveMode) {
-      // Run interactive mode with monitoring
-      // For interactive mode, use monitoring instead of spawn
-      try {
-        const output = await runClaudeWithMonitoring(claudeArgs);
-        
-        // Exit with Claude's exit code
-        Deno.exit(output.exitCode);
-      } catch (error) {
-        console.error(`❌ Claude CLI execution failed: ${error}`);
-        console.log(`ℹ️  Try running 'claude doctor' to diagnose Claude CLI issues`);
-        console.log(`ℹ️  Or run 'claude' directly to test Claude CLI`);
-        console.log(`ℹ️  Args passed to claude: ${JSON.stringify(claudeArgs)}`);
-        Deno.exit(1);
-      }
-    } else {
-      // Run single command mode with monitoring
-      const output = await runClaudeWithMonitoring(claudeArgs);
-      
-      // Exit with Claude's exit code
-      Deno.exit(output.exitCode);
-    }
+    const output = await runClaudeWithMonitoring(args);
+    Deno.exit(output.exitCode);
   } catch (error) {
-    console.error('Error running Claude session:', error);
+    if (isInteractiveMode) {
+      console.error(`❌ Claude CLI execution failed: ${error}`);
+      console.log(`ℹ️  Try running 'claude doctor' to diagnose Claude CLI issues`);
+      console.log(`ℹ️  Or run 'claude' directly to test Claude CLI`);
+      console.log(`ℹ️  Args passed to claude: ${JSON.stringify(args)}`);
+    } else {
+      console.error('Error running Claude session:', error);
+    }
     Deno.exit(1);
   }
 }
 
-
-async function main() {
-  const args = Deno.args;
-  
-  // Handle ccgit-specific commands
-  if (args[0] === 'checkout' && args[1]) {
-    await checkoutSession(args[1]);
-    return;
-  }
-  
-  if (args[0] === 'start' && args[1]) {
-    await startSession(args[1]);
-    return;
-  }
-  
-  if (args[0] === 'list') {
-    await listSessions();
-    return;
-  }
-  
-  // Handle help
-  if (args.includes('--help') || args.includes('-h')) {
-    console.log(`ccgit - Claude Chat Git Integration
+function showHelp(): void {
+  console.log(`ccgit - Claude Chat Git Integration
 
 Usage:
   ccgit [claude options]        Run Claude with automatic git tracking
@@ -277,39 +259,74 @@ Examples:
   ccgit start feature-auth     Create branch claude/feature-auth-<timestamp>
   ccgit list                   Show recent sessions
 `);
-    return;
+}
+
+function showInteractiveInfo(args: string[]): void {
+  console.log(`🚀 Starting Claude interactive session with auto-commit...`);
+  console.log(`🎯 Interactive mode with auto-commit enabled`);
+  
+  // Show specific options being passed
+  if (args.includes('--dangerously-skip-permissions')) {
+    console.log(`⚠️  --dangerously-skip-permissions enabled for this session`);
   }
-  // Handle interactive mode
-  const hasPromptArg = args.some(arg => !arg.startsWith('-'));
-  if (!hasPromptArg) {
-    console.log(`🚀 Starting Claude interactive session with auto-commit...`);
-    console.log(`🎯 Interactive mode with auto-commit enabled`);
-    
-    // Show specific options being passed
-    if (args.includes('--dangerously-skip-permissions')) {
-      console.log(`⚠️  --dangerously-skip-permissions enabled for this session`);
-    }
-    if (args.includes('-c') || args.includes('--continue')) {
-      console.log(`↩️  Continuing last Claude conversation`);
-    }
-    if (args.includes('-r') || args.includes('--resume')) {
-      const resumeIndex = Math.max(args.indexOf('-r'), args.indexOf('--resume'));
-      const sessionId = args[resumeIndex + 1];
-      if (sessionId) {
-        console.log(`📂 Resuming Claude session: ${sessionId}`);
-      }
-    }
-    if (args.includes('--model')) {
-      const modelIndex = args.indexOf('--model');
-      const model = args[modelIndex + 1];
-      if (model) {
-        console.log(`🤖 Using model: ${model}`);
-      }
+  
+  if (args.includes('-c') || args.includes('--continue')) {
+    console.log(`↩️  Continuing last Claude conversation`);
+  }
+  
+  if (args.includes('-r') || args.includes('--resume')) {
+    const resumeIndex = Math.max(args.indexOf('-r'), args.indexOf('--resume'));
+    const sessionId = args[resumeIndex + 1];
+    if (sessionId) {
+      console.log(`📂 Resuming Claude session: ${sessionId}`);
     }
   }
   
-  // Pass through ALL arguments to Claude CLI transparently
-  // This includes: -c, --continue, -r, --resume, --model, --dangerously-skip-permissions, etc.
+  if (args.includes('--model')) {
+    const modelIndex = args.indexOf('--model');
+    const model = args[modelIndex + 1];
+    if (model) {
+      console.log(`🤖 Using model: ${model}`);
+    }
+  }
+}
+
+async function main() {
+  const args = Deno.args;
+  
+  // Handle ccgit-specific commands
+  switch (args[0]) {
+    case 'checkout':
+      if (args[1]) {
+        await checkoutSession(args[1]);
+        return;
+      }
+      break;
+      
+    case 'start':
+      if (args[1]) {
+        await startSession(args[1]);
+        return;
+      }
+      break;
+      
+    case 'list':
+      await listSessions();
+      return;
+  }
+  
+  // Handle help
+  if (args.includes('--help') || args.includes('-h')) {
+    showHelp();
+    return;
+  }
+  
+  // Show interactive mode info
+  if (!hasPromptArgument(args)) {
+    showInteractiveInfo(args);
+  }
+  
+  // Pass through to Claude
   await handleClaudeSession(args);
 }
 
