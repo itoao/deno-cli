@@ -1,12 +1,13 @@
 import { $ } from "jsr:@david/dax@0.40.0";
 import type { GitFileChange, SessionMetadata } from "./types.ts";
+import { rethrowError, warn } from "./error-handler.ts";
 
 export async function getGitRoot(): Promise<string> {
   try {
     const result = await $`git rev-parse --show-toplevel`.text();
     return result.trim();
   } catch (error) {
-    throw new Error(`Failed to get git root: ${error}`);
+    rethrowError(error, "Failed to get git root", "GIT_ROOT_ERROR");
   }
 }
 
@@ -16,7 +17,7 @@ export async function executeGitCommand(args: string[]): Promise<string> {
     const result = await $`git ${args}`.cwd(gitRoot).text();
     return result;
   } catch (error) {
-    throw new Error(`Git command failed: git ${args.join(' ')} - ${error}`);
+    rethrowError(error, `Git command failed: git ${args.join(' ')}`, "GIT_COMMAND_ERROR");
   }
 }
 
@@ -39,7 +40,7 @@ export async function stashChanges(): Promise<boolean> {
     }
     return false;
   } catch (error) {
-    throw new Error(`Failed to stash changes: ${error}`);
+    rethrowError(error, "Failed to stash changes", "GIT_STASH_ERROR");
   }
 }
 
@@ -61,7 +62,7 @@ export async function getStagedFiles(): Promise<GitFileChange[]> {
       return { path, status: status as GitFileChange['status'] };
     });
   } catch (error) {
-    throw new Error(`Failed to get staged files: ${error}`);
+    rethrowError(error, "Failed to get staged files", "GIT_STAGED_FILES_ERROR");
   }
 }
 
@@ -92,7 +93,7 @@ export async function getGitStagedFiles(): Promise<GitFileChange[]> {
         }
         return { path, status, diff } as GitFileChange;
       } catch (error) {
-        console.warn(`⚠️ Failed to get diff for ${path}:`, error);
+        warn(`Failed to get diff for ${path}: ${error instanceof Error ? error.message : String(error)}`);
         return { path, status, diff: '' };
       }
     });
@@ -100,7 +101,7 @@ export async function getGitStagedFiles(): Promise<GitFileChange[]> {
     const results = await Promise.all(filePromises);
     return results.filter((file): file is GitFileChange => file !== null);
   } catch (error) {
-    throw new Error(`Failed to get staged files: ${error instanceof Error ? error.message : String(error)}`);
+    rethrowError(error, "Failed to get staged files", "GIT_STAGED_FILES_ERROR");
   }
 }
 
@@ -133,7 +134,7 @@ export async function commitChanges(
     
     await $`git commit -m ${message}`.quiet();
   } catch (error) {
-    throw new Error(`Failed to commit changes: ${error}`);
+    rethrowError(error, "Failed to commit changes", "GIT_COMMIT_ERROR");
   }
 }
 
@@ -153,7 +154,7 @@ export async function checkoutCommit(commitHash: string): Promise<void> {
     // Then checkout
     await $`git checkout ${commitHash}`.quiet();
   } catch (error) {
-    throw new Error(`Failed to checkout commit: ${error}`);
+    rethrowError(error, "Failed to checkout commit", "GIT_CHECKOUT_ERROR");
   }
 }
 
@@ -161,7 +162,7 @@ export async function createBranch(name: string): Promise<void> {
   try {
     await $`git checkout -b ${name}`.quiet();
   } catch (error) {
-    throw new Error(`Failed to create branch: ${error}`);
+    rethrowError(error, "Failed to create branch", "GIT_BRANCH_ERROR");
   }
 }
 
@@ -170,7 +171,7 @@ export async function getFileContent(path: string): Promise<string> {
     const result = await $`git show :${path}`.text();
     return result;
   } catch (error) {
-    throw new Error(`Failed to get file content: ${error}`);
+    rethrowError(error, "Failed to get file content", "GIT_FILE_CONTENT_ERROR");
   }
 }
 
@@ -179,7 +180,7 @@ export async function getFileDiff(path: string): Promise<string> {
     const result = await $`git diff --cached ${path}`.text();
     return result;
   } catch (error) {
-    throw new Error(`Failed to get file diff: ${error}`);
+    rethrowError(error, "Failed to get file diff", "GIT_FILE_DIFF_ERROR");
   }
 }
 
@@ -208,6 +209,6 @@ export async function createCommit(files: GitFileChange[], title: string): Promi
     await executeGitCommand(["commit", "-m", title]);
     console.log(`✅ ${title}`);
   } catch (error) {
-    throw new Error(`Failed to create commit: ${error instanceof Error ? error.message : String(error)}`);
+    rethrowError(error, "Failed to create commit", "GIT_CREATE_COMMIT_ERROR");
   }
 }
