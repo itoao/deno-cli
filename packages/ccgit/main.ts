@@ -177,7 +177,7 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
     const hasPromptArg = filteredArgs.some(arg => !arg.startsWith('-'));
     const isInteractiveCall = !hasPromptArg;
     
-    const cmd = new Deno.Command("yolo", {
+    const cmd = new Deno.Command("claude", {
       args: filteredArgs,
       stdout: isInteractiveCall ? "inherit" : "piped",
       stderr: isInteractiveCall ? "inherit" : "piped", 
@@ -267,9 +267,9 @@ async function handleClaudeSession(args: string[]): Promise<void> {
     delete env.CLAUDE_CODE_ENTRYPOINT;
     
     if (args.length === 0) {
-      await $`yolo`.env(env).spawn();
+      await $`claude`.env(env).spawn();
     } else {
-      await $`yolo ${args}`.env(env).spawn();
+      await $`claude ${args}`.env(env).spawn();
     }
     return;
   }
@@ -295,9 +295,6 @@ async function handleClaudeSession(args: string[]): Promise<void> {
   // Pass through all arguments as-is to claude
   const claudeArgs = [...args];
   
-  // Debug logging
-  console.log(`🔍 Debug: isInteractiveMode=${isInteractiveMode}, claudeArgs=${JSON.stringify(claudeArgs)}`);
-  
   try {
     // Run Claude with real-time monitoring
     console.log("🚀 Starting Claude session with auto-commit...");
@@ -305,12 +302,6 @@ async function handleClaudeSession(args: string[]): Promise<void> {
     
     if (isInteractiveMode) {
       // Run interactive mode with monitoring
-      if (hasDangerouslySkipOnly) {
-        console.log(`⚠️  To enable --dangerously-skip-permissions in interactive mode:`);
-        console.log(`   Type: /mode --dangerously-skip-permissions`);
-        console.log(`   Or press Shift+Tab to toggle auto-accept mode`);
-        console.log(``);
-      }
       // For interactive mode, use monitoring instead of spawn
       try {
         const output = await runClaudeWithMonitoring(claudeArgs);
