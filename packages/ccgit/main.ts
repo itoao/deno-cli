@@ -237,9 +237,6 @@ function showHelp(): void {
 
 Usage:
   ccgit [claude options]        Run Claude with automatic git tracking
-  ccgit checkout <session-id>   Checkout a previous session
-  ccgit start <name>           Create a new branch for a session
-  ccgit list                   List recent Claude sessions
   
 Claude options (passed through):
   --dangerously-skip-permissions  Skip all permission checks
@@ -254,9 +251,6 @@ Examples:
   ccgit -c                     Continue last Claude conversation
   ccgit --resume abc123        Resume a Claude session
   ccgit --dangerously-skip-permissions  Start with permissions bypassed
-  ccgit checkout abc123        Restore code from session abc123
-  ccgit start feature-auth     Create branch claude/feature-auth-<timestamp>
-  ccgit list                   Show recent sessions
 `);
 }
 
