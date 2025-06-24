@@ -23,7 +23,7 @@ jobs:
           deno-version: v2.x
 
       - name: Install npm dependencies
-        run: npm install
+        run: deno install
 
       - name: Cache Deno dependencies
         run: deno cache shared/**/*.ts packages/**/*.ts
