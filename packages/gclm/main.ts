@@ -28,7 +28,7 @@ const CONFIG: Config = {
 };
 
 function createFilePreview(file: GitFileChange): string {
-  const diffLines = file.diff ? file.diff.split("\n") : [];
+  const diffLines = file.diff ? file.diff.replace(/\0/g, '').split("\n") : [];
   const preview = diffLines.slice(0, CONFIG.maxDiffPreviewLines).join("\n");
   return `- ${file.path} (${file.status})\n  Changes: ${preview}`;
 }
@@ -42,8 +42,8 @@ async function groupFilesByLLM(
 
   const fileList = files.map(createFilePreview).join("\n\n");
 
-  const prompt =
-    `Analyze these staged git files and group them into logical commits. Each group should be a cohesive set of changes.
+  // Clean prompt to remove null bytes and ensure clean encoding
+  const prompt = `Analyze these staged git files and group them into logical commits. Each group should be a cohesive set of changes.
 
 Files:
 ${fileList}
@@ -63,7 +63,7 @@ Return a JSON array where each element is an array of file paths to commit toget
   ["README.md"]
 ]
 
-Return ONLY the JSON array, no other text.`;
+Return ONLY the JSON array, no other text.`.replace(/\0/g, ''); // Remove null bytes
 
   try {
     const messages: SDKMessage[] = [];
@@ -76,7 +76,9 @@ Return ONLY the JSON array, no other text.`;
         options: CONFIG.queryOptions,
       })
     ) {
-      messages.push(message);
+      if (message) { // Add null check
+        messages.push(message);
+      }
     }
 
     const groupPaths = extractGroupPathsFromMessages(messages);
@@ -120,8 +122,18 @@ Return ONLY the JSON array, no other text.`;
 function extractGroupPathsFromMessages(
   messages: SDKMessage[],
 ): string[][] | null {
+  // Check if messages is null or empty
+  if (!messages || messages.length === 0) {
+    return null;
+  }
+
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
+    
+    // Null check for message
+    if (!message) {
+      continue;
+    }
 
     try {
       if (message.type === "result" && "result" in message && message.result) {
@@ -139,7 +151,7 @@ function extractGroupPathsFromMessages(
         message.message?.content
       ) {
         for (const content of message.message.content) {
-          if (content.type === "text" && content.text) {
+          if (content?.type === "text" && content.text) {
             const groupsText = String(content.text).trim();
             // Try to extract JSON from the text if it contains extra content
             const jsonMatch = groupsText.match(/\[[\s\S]*\]/);
