@@ -284,7 +284,7 @@ Claude CLI Options (all passed through transparently):
           
           // Add extra spacing between option and description for better readability
           // Match pattern like "  -c, --continue                  Continue..."
-          modifiedLine = modifiedLine.replace(/^(\s*)(-[^A-Z]*?)(\s{2,})([A-Z])/g, '$1$2$3    $4');
+          modifiedLine = modifiedLine.replace(/^(\s*)(-[^A-Z]*?)(\s{2,})([A-Z])/g, '$1  $2$3      $4');
           
           console.log(`  ${modifiedLine.trim()}`);
         }
