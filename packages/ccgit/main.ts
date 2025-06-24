@@ -23,6 +23,13 @@ interface FileWatcherOptions {
   debounceTimer?: number;
 }
 
+interface SessionMetadata {
+  sessionId: string;
+  timestamp: string;
+  prompt: string;
+  resumedFrom: undefined;
+}
+
 interface ClaudeProcessOptions {
   args: string[];
   isInteractive: boolean;
@@ -39,12 +46,7 @@ function hasPromptArgument(args: string[]): boolean {
   return args.some((arg) => !arg.startsWith("-") && !arg.startsWith("/"));
 }
 
-export async function commitFileChanges(metadata: {
-  sessionId: string;
-  timestamp: string;
-  prompt: string;
-  resumedFrom: undefined;
-}): Promise<void> {
+export async function commitFileChanges(metadata: SessionMetadata): Promise<void> {
   try {
     // Check if we're in a git repository first
     await git.getGitRoot();
@@ -112,6 +114,7 @@ export async function watchFileChanges(options: FileWatcherOptions): Promise<voi
 
   for await (const event of watcher) {
     if (!options.watcherActive) break;
+    
     if (["modify", "create", "remove"].includes(event.kind)) {
       options.changeBuffer = true;
       
