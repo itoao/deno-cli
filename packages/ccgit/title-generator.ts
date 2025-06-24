@@ -11,10 +11,23 @@ const FILE_TYPE_PATTERNS = {
   build: (path: string) => path.includes('build') || path.includes('dist') || path.endsWith('.lock'),
 } as const;
 
-export function generateCommitTitle(
+export async function generateCommitTitle(
   files: GitFileChange[],
   metadata: SessionMetadata
-): string {
+): Promise<string> {
+  try {
+    // Try LLM generation first
+    const llmTitle = await generateTitleWithLLM(files);
+    return llmTitle;
+  } catch (error) {
+    console.warn("⚠️ LLM title generation failed, using pattern-based fallback:", error instanceof Error ? error.message : String(error));
+    
+    // Fallback to pattern-based generation
+    return generateFallbackTitle(files, metadata);
+  }
+}
+
+function generateFallbackTitle(files: GitFileChange[], metadata: SessionMetadata): string {
   // If we have a prompt, try to generate title from it
   if (metadata.prompt) {
     const shortPrompt = metadata.prompt.slice(0, 40).toLowerCase();
