@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run --allow-all
 import { $ } from "jsr:@david/dax@0.40.0";
 import * as git from "./git.ts";
-import type { ClaudeOutput } from "./types.ts";
+import type { ClaudeOutput } from "../../shared/types.ts";
 
 // Constants
 const DEBOUNCE_DELAY = 500;
