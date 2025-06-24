@@ -306,38 +306,38 @@ async function handleClaudeSession(args: string[]): Promise<void> {
       try {
         const output = await runClaudeWithMonitoring(claudeArgs);
         
-        // Final commit for any remaining changes
-        const hasChanges = await git.hasUncommittedChanges();
-        if (hasChanges) {
-          const metadata = {
-            sessionId: `interactive-session-${Date.now()}`,
-            timestamp: new Date().toISOString(),
-            prompt: "Interactive session completion",
-            resumedFrom: undefined,
-          };
-          const changedFiles = await git.getStagedFiles();
-          
-          // Convert to shared GitFileChange type and add diff information
-          const filesWithDiff: SharedGitFileChange[] = await Promise.all(
-            changedFiles.map(async (file) => {
-              let diff = '';
-              try {
-                if (file.status === 'A') {
-                  diff = await git.getFileContent(file.path);
-                } else {
-                  diff = await git.getFileDiff(file.path);
-                }
-              } catch {
-                // Ignore diff extraction errors
-              }
-              return { ...file, diff };
-            })
-          );
-          
-          const title = `Claude Chat Session: ${metadata.sessionId}`;
-          await git.commitChanges(title, metadata);
-          console.log(`\n✅ Final interactive session commit with ID: ${metadata.sessionId}`);
-        }
+        // Final commit for any remaining changes - DISABLED
+        // const hasChanges = await git.hasUncommittedChanges();
+        // if (hasChanges) {
+        //   const metadata = {
+        //     sessionId: `interactive-session-${Date.now()}`,
+        //     timestamp: new Date().toISOString(),
+        //     prompt: "Interactive session completion",
+        //     resumedFrom: undefined,
+        //   };
+        //   const changedFiles = await git.getStagedFiles();
+        //   
+        //   // Convert to shared GitFileChange type and add diff information
+        //   const filesWithDiff: SharedGitFileChange[] = await Promise.all(
+        //     changedFiles.map(async (file) => {
+        //       let diff = '';
+        //       try {
+        //         if (file.status === 'A') {
+        //           diff = await git.getFileContent(file.path);
+        //         } else {
+        //           diff = await git.getFileDiff(file.path);
+        //         }
+        //       } catch {
+        //         // Ignore diff extraction errors
+        //       }
+        //       return { ...file, diff };
+        //     })
+        //   );
+        //   
+        //   const title = `Claude Chat Session: ${metadata.sessionId}`;
+        //   await git.commitChanges(title, metadata);
+        //   console.log(`\n✅ Final interactive session commit with ID: ${metadata.sessionId}`);
+        // }
         
         // Exit with Claude's exit code
         Deno.exit(output.exitCode);
@@ -352,33 +352,33 @@ async function handleClaudeSession(args: string[]): Promise<void> {
       // Run single command mode with monitoring
       const output = await runClaudeWithMonitoring(claudeArgs);
       
-      // Final commit for any remaining changes
-      const hasChanges = await git.hasUncommittedChanges();
-      if (hasChanges) {
-        const metadata = parseClaudeOutput(output, args);
-        const changedFiles = await git.getStagedFiles();
-        
-        // Convert to shared GitFileChange type and add diff information
-        const filesWithDiff: SharedGitFileChange[] = await Promise.all(
-          changedFiles.map(async (file) => {
-            let diff = '';
-            try {
-              if (file.status === 'A') {
-                diff = await git.getFileContent(file.path);
-              } else {
-                diff = await git.getFileDiff(file.path);
-              }
-            } catch {
-              // Ignore diff extraction errors
-            }
-            return { ...file, diff };
-          })
-        );
-        
-        const title = `Claude Chat Session: ${metadata.sessionId}`;
-        await git.commitChanges(title, metadata);
-        console.log(`\n✅ Final session commit with ID: ${metadata.sessionId}`);
-      }
+      // Final commit for any remaining changes - DISABLED
+      // const hasChanges = await git.hasUncommittedChanges();
+      // if (hasChanges) {
+      //   const metadata = parseClaudeOutput(output, args);
+      //   const changedFiles = await git.getStagedFiles();
+      //   
+      //   // Convert to shared GitFileChange type and add diff information
+      //   const filesWithDiff: SharedGitFileChange[] = await Promise.all(
+      //     changedFiles.map(async (file) => {
+      //       let diff = '';
+      //       try {
+      //         if (file.status === 'A') {
+      //           diff = await git.getFileContent(file.path);
+      //         } else {
+      //           diff = await git.getFileDiff(file.path);
+      //         }
+      //       } catch {
+      //         // Ignore diff extraction errors
+      //       }
+      //       return { ...file, diff };
+      //     })
+      //   );
+      //   
+      //   const title = `Claude Chat Session: ${metadata.sessionId}`;
+      //   await git.commitChanges(title, metadata);
+      //   console.log(`\n✅ Final session commit with ID: ${metadata.sessionId}`);
+      // }
       
       // Exit with Claude's exit code
       Deno.exit(output.exitCode);
