@@ -83,7 +83,7 @@ function createCommitPrompt(
   const fileList = files.map((f) => `${f.path} (${f.status})`).join("\n");
   const diffSample = files
     .filter((f) => f.diff)
-    .map((f) => (f.diff ?? "").split("\n").slice(0, config.maxDiffPreviewLines).join("\n"))
+    .map((f) => (f.diff ?? "").replace(/\0/g, '').split("\n").slice(0, config.maxDiffPreviewLines).join("\n"))
     .join("\n---\n");
 
   return `Generate a concise commit title for these changes:
@@ -104,12 +104,22 @@ feat: add user authentication
 fix: resolve memory leak in parser
 chore: update dependencies
 
-Return only the title:`;
+Return only the title:`.replace(/\0/g, '');
 }
 
 function extractTitleFromMessages(messages: SDKMessage[]): string | null {
+  // Check if messages is null or empty
+  if (!messages || messages.length === 0) {
+    return null;
+  }
+
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
+    
+    // Null check for message
+    if (!message) {
+      continue;
+    }
 
     if (message.type === "result" && "result" in message && message.result) {
       const title = String(message.result).trim();
@@ -123,7 +133,7 @@ function extractTitleFromMessages(messages: SDKMessage[]): string | null {
       message.message?.content
     ) {
       for (const content of message.message.content) {
-        if (content.type === "text" && content.text) {
+        if (content?.type === "text" && content.text) {
           const title = String(content.text).trim();
           // Extract only the commit title, remove any extra explanatory text
           const lines = title.split("\n");
@@ -154,7 +164,9 @@ export async function generateCommitTitle(
         options: mergedConfig.queryOptions,
       })
     ) {
-      messages.push(message);
+      if (message) { // Add null check
+        messages.push(message);
+      }
     }
 
     const title = extractTitleFromMessages(messages);
