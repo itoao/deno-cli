@@ -3,14 +3,11 @@ import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code";
 import {
   categorizeFiles,
   createCommit,
-  executeGitCommand,
   generateCommitTitle,
   getGitStagedFiles,
   type GitFileChange,
   handleError,
-  hasChangesToCommit,
   warn,
-  withErrorHandling,
 } from "../../shared/index.ts";
 
 interface Config {
