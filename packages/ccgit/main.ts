@@ -20,6 +20,14 @@ interface FileWatcherOptions {
   commitInProgress: boolean;
   lastCommitTime: number;
   changeBuffer: boolean;
+  debounceTimer?: number;
+}
+
+interface SessionMetadata {
+  sessionId: string;
+  timestamp: string;
+  prompt: string;
+  resumedFrom: undefined;
 }
 
 interface ClaudeProcessOptions {
@@ -38,48 +46,52 @@ function hasPromptArgument(args: string[]): boolean {
   return args.some((arg) => !arg.startsWith("-") && !arg.startsWith("/"));
 }
 
-async function commitFileChanges(metadata: {
-  sessionId: string;
-  timestamp: string;
-  prompt: string;
-  resumedFrom: undefined;
-}): Promise<void> {
-  const hasChanges = await git.hasUncommittedChanges();
-  if (!hasChanges) return;
+export async function commitFileChanges(metadata: SessionMetadata): Promise<void> {
+  try {
+    // Check if we're in a git repository first
+    await git.getGitRoot();
+    
+    const hasChanges = await git.hasUncommittedChanges();
+    if (!hasChanges) return;
 
-  const changedFiles = await git.getStagedFiles();
-  await Promise.all(
-    changedFiles.map(async (file) => {
-      let diff = "";
-      try {
-        if (file.status === "A") {
-          diff = await git.getFileContent(file.path);
-        } else {
-          diff = await git.getFileDiff(file.path);
+    const changedFiles = await git.getStagedFiles();
+    await Promise.all(
+      changedFiles.map(async (file) => {
+        let diff = "";
+        try {
+          if (file.status === "A") {
+            diff = await git.getFileContent(file.path);
+          } else {
+            diff = await git.getFileDiff(file.path);
+          }
+        } catch {
+          // Ignore diff read errors, use empty diff
         }
-      } catch {
-        // Ignore diff read errors, use empty diff
-      }
-      return { ...file, diff };
-    }),
-  );
+        return { ...file, diff };
+      }),
+    );
 
-  const title = `Claude Chat Session: ${metadata.sessionId}`;
-  await git.commitChanges(title, metadata);
-  logger.log(`\n🎯 Auto-committed by fswatch`);
+    const title = `Claude Chat Session: ${metadata.sessionId}`;
+    await git.commitChanges(title, metadata);
+    logger.log(`\n🎯 Auto-committed by fswatch`);
+  } catch (error) {
+    // Rethrow with more context for better error messages
+    throw new Error(`Failed to commit file changes: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
-function createFileWatcher(): FileWatcherOptions {
+export function createFileWatcher(): FileWatcherOptions {
   return {
     watcher: Deno.watchFs("."),
     watcherActive: true,
     commitInProgress: false,
     lastCommitTime: 0,
     changeBuffer: false,
+    debounceTimer: undefined,
   };
 }
 
-async function watchFileChanges(options: FileWatcherOptions): Promise<void> {
+export async function watchFileChanges(options: FileWatcherOptions): Promise<void> {
   const { watcher } = options;
 
   async function commitIfChanged(): Promise<void> {
@@ -102,9 +114,16 @@ async function watchFileChanges(options: FileWatcherOptions): Promise<void> {
 
   for await (const event of watcher) {
     if (!options.watcherActive) break;
+    
     if (["modify", "create", "remove"].includes(event.kind)) {
       options.changeBuffer = true;
-      setTimeout(async () => {
+      
+      // Clear existing timer to reset debounce
+      if (options.debounceTimer !== undefined) {
+        clearTimeout(options.debounceTimer);
+      }
+      
+      options.debounceTimer = setTimeout(async () => {
         if (
           options.changeBuffer &&
           Date.now() - options.lastCommitTime > MIN_COMMIT_INTERVAL
@@ -112,8 +131,15 @@ async function watchFileChanges(options: FileWatcherOptions): Promise<void> {
           options.changeBuffer = false;
           await commitIfChanged();
         }
-      }, DEBOUNCE_DELAY);
+        options.debounceTimer = undefined;
+      }, DEBOUNCE_DELAY) as unknown as number;
     }
+  }
+  
+  // Cleanup: clear any pending timer
+  if (options.debounceTimer !== undefined) {
+    clearTimeout(options.debounceTimer);
+    options.debounceTimer = undefined;
   }
 }
 
@@ -184,7 +210,7 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
   const fileWatcher = createFileWatcher();
 
   // Start file watching in background
-  const _watchPromise = watchFileChanges(fileWatcher);
+  watchFileChanges(fileWatcher).catch(() => {});
 
   try {
     const env = cleanEnvironment();
@@ -324,7 +350,7 @@ Claude CLI Options (all passed through transparently):
     if (!optionsFound) {
       logger.log("  (Run 'claude --help' for complete Claude CLI options)");
     }
-  } catch (_error) {
+  } catch {
     logger.log("  (Run 'claude --help' for complete Claude CLI options)");
   }
 }

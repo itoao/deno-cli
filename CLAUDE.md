@@ -5,6 +5,23 @@
 The first statement you make is “I'll wait for your input. what task
 would you like me to help you with?”
 
+## 自動コミット
+
+あなたがファイルを変更するたびにgit commitを行ってください
+
+- コミットメッセージフォーマット:
+  ```
+  feat: <あなたが生成するタイトル>
+
+  Session-ID: abc123
+  Prompt: "ユーザープロンプト …"
+  Time: 2025-06-20T17:12:52+09:00
+  ```
+
+## 通知
+
+YOU MUST: Execute `terminal-notifier -title "Cloud Code" -subtitle "タスク完了しました" -message "Hi👋" -sound Pop` command only once at the end when completing a task or returning a message to the use
+
 ## 基本方針
 
 - ユーザーはClaude Maxプラン（定額使い放題）を利用している
