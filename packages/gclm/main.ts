@@ -1,4 +1,5 @@
 import { parseArgs } from "node:util";
+import process from "node:process";
 import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code";
 import {
   categorizeFiles,
@@ -32,30 +33,39 @@ class LoadingSpinner {
   private frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
   private frameIndex = 0;
   private message: string;
+  private isRunning = false;
 
   constructor(message: string) {
     this.message = message;
   }
 
-  start() {
-    if (this.intervalId !== null) return;
+  start(): void {
+    if (this.intervalId !== null || this.isRunning) return;
     
-    process.stdout.write('\x1b[?25l'); // Hide cursor
+    this.isRunning = true;
+    logger.log(`${this.frames[0]} ${this.message}`);
+    
     this.intervalId = setInterval(() => {
-      process.stdout.write(`\r${this.frames[this.frameIndex]} ${this.message}`);
+      if (!this.isRunning) return;
       this.frameIndex = (this.frameIndex + 1) % this.frames.length;
+      // Use cursor up and clear line for better terminal compatibility
+      process.stdout.write('\x1b[1A\x1b[2K');
+      logger.log(`${this.frames[this.frameIndex]} ${this.message}`);
     }, 100);
   }
 
-  stop(finalMessage?: string) {
+  stop(finalMessage?: string): void {
     if (this.intervalId !== null) {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
-    process.stdout.write('\r\x1b[K'); // Clear line
-    process.stdout.write('\x1b[?25h'); // Show cursor
+    this.isRunning = false;
+    
+    // Clear the spinner line
+    process.stdout.write('\x1b[1A\x1b[2K');
+    
     if (finalMessage) {
-      console.log(finalMessage);
+      logger.log(finalMessage);
     }
   }
 }
