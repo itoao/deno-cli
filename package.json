@@ -10,6 +10,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@anthropic-ai/claude-code": "^1.0.22"
+    "@anthropic-ai/claude-code": "^1.0.33"
   }
 }
