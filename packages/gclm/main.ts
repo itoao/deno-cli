@@ -1,6 +1,6 @@
 import { parseArgs } from "node:util";
-import ora from "npm:ora";
-import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code";
+import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code@1.0.33";
+import ora from "npm:ora@8.2.0";
 import {
   categorizeFiles,
   createCommit,
@@ -50,7 +50,7 @@ class LoadingSpinner {
 }
 
 function createFilePreview(file: GitFileChange): string {
-  const diffLines = file.diff ? file.diff.replace(/\0/g, '').split("\n") : [];
+  const diffLines = file.diff ? file.diff.replace(/\0/g, "").split("\n") : [];
   const preview = diffLines.slice(0, CONFIG.maxDiffPreviewLines).join("\n");
   return `- ${file.path} (${file.status})\n  Changes: ${preview}`;
 }
@@ -65,7 +65,8 @@ async function groupFilesByLLM(
   const fileList = files.map(createFilePreview).join("\n\n");
 
   // Clean prompt to remove null bytes and ensure clean encoding
-  const prompt = `Analyze these staged git files and group them into logical commits. Each group should be a cohesive set of changes.
+  const prompt =
+    `Analyze these staged git files and group them into logical commits. Each group should be a cohesive set of changes.
 
 Files:
 ${fileList}
@@ -85,7 +86,7 @@ Return a JSON array where each element is an array of file paths to commit toget
   ["README.md"]
 ]
 
-Return ONLY the JSON array, no other text.`.replace(/\0/g, ''); // Remove null bytes
+Return ONLY the JSON array, no other text.`.replace(/\0/g, ""); // Remove null bytes
 
   const spinner = new LoadingSpinner("🧠 AI is analyzing files for logical grouping...");
   spinner.start();
@@ -156,7 +157,7 @@ function extractGroupPathsFromMessages(
 
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
-    
+
     // Null check for message
     if (!message) {
       continue;
@@ -309,7 +310,7 @@ Make sure to stage your files with 'git add' before running gclm.
   try {
     const spinner = new LoadingSpinner("🔍 Analyzing staged files...");
     spinner.start();
-    
+
     const stagedFiles = await getGitStagedFiles();
     spinner.stop();
 
@@ -328,7 +329,7 @@ Make sure to stage your files with 'git add' before running gclm.
       }
       const titleSpinner = new LoadingSpinner("📝 Generating commit title...");
       titleSpinner.start();
-      
+
       const title = await generateCommitTitle(stagedFiles, {
         maxCommitTitleLength: CONFIG.maxCommitTitleLength,
         maxDiffPreviewLines: CONFIG.maxDiffPreviewLines,
