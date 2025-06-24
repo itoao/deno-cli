@@ -173,9 +173,9 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
     delete env.CLAUDE_CODE_SSE_PORT;
     delete env.CLAUDE_CODE_ENTRYPOINT;
     
-    // For interactive mode (no args), don't use --print mode
-    const isInteractiveCall = filteredArgs.length === 0 || 
-      (filteredArgs.length === 1 && filteredArgs[0] === '--dangerously-skip-permissions');
+    // For interactive mode (no prompt provided), don't use --print mode
+    const hasPromptArg = filteredArgs.some(arg => !arg.startsWith('-'));
+    const isInteractiveCall = !hasPromptArg;
     
     const cmd = new Deno.Command("yolo", {
       args: filteredArgs,
@@ -276,10 +276,21 @@ async function handleClaudeSession(args: string[]): Promise<void> {
   
   // Handle --dangerously-skip-permissions properly
   const hasDangerouslySkipOnly = args.length === 1 && args[0] === '--dangerously-skip-permissions';
-  const hasOtherArgs = args.some(arg => arg !== '--dangerously-skip-permissions');
   
-  // Interactive mode: no args or only --dangerously-skip-permissions
-  const isInteractiveMode = !hasOtherArgs;
+  // Check if we have a prompt argument (non-option argument)
+  const hasPromptArg = args.some(arg => !arg.startsWith('-'));
+  
+  // Interactive mode: no prompt argument provided
+  // Examples of interactive mode:
+  // - ccgit
+  // - ccgit --dangerously-skip-permissions
+  // - ccgit -c
+  // - ccgit --continue
+  // - ccgit --model opus
+  // Examples of non-interactive mode:
+  // - ccgit "Fix the bug"
+  // - ccgit -c "Continue fixing"
+  const isInteractiveMode = !hasPromptArg;
   
   // Pass through all arguments as-is to claude
   const claudeArgs = [...args];
@@ -417,27 +428,56 @@ Usage:
   ccgit start <name>           Create a new branch for a session
   ccgit list                   List recent Claude sessions
   
+Claude options (passed through):
+  --dangerously-skip-permissions  Skip all permission checks
+  -c, --continue                  Continue last conversation
+  -r, --resume [sessionId]        Resume a specific session
+  --print                         Non-interactive mode
+  --model <model>                 Specify model to use
+  
 Examples:
   ccgit                        Start interactive Claude session
   ccgit "Fix the bug"          Single prompt to Claude
+  ccgit -c                     Continue last Claude conversation
   ccgit --resume abc123        Resume a Claude session
+  ccgit --dangerously-skip-permissions  Start with permissions bypassed
   ccgit checkout abc123        Restore code from session abc123
   ccgit start feature-auth     Create branch claude/feature-auth-<timestamp>
   ccgit list                   Show recent sessions
 `);
     return;
   }
-  // Handle interactive mode  
-  if (args.length === 0) {
+  // Handle interactive mode
+  const hasPromptArg = args.some(arg => !arg.startsWith('-'));
+  if (!hasPromptArg) {
     console.log(`🚀 Starting Claude interactive session with auto-commit...`);
     console.log(`🎯 Interactive mode with auto-commit enabled`);
-  } else if (args.length === 1 && args[0] === '--dangerously-skip-permissions') {
-    console.log(`🚀 Starting Claude interactive session with auto-commit...`);
-    console.log(`🎯 Interactive mode with auto-commit enabled`);
-    console.log(`⚠️  --dangerously-skip-permissions enabled for this session`);
+    
+    // Show specific options being passed
+    if (args.includes('--dangerously-skip-permissions')) {
+      console.log(`⚠️  --dangerously-skip-permissions enabled for this session`);
+    }
+    if (args.includes('-c') || args.includes('--continue')) {
+      console.log(`↩️  Continuing last Claude conversation`);
+    }
+    if (args.includes('-r') || args.includes('--resume')) {
+      const resumeIndex = Math.max(args.indexOf('-r'), args.indexOf('--resume'));
+      const sessionId = args[resumeIndex + 1];
+      if (sessionId) {
+        console.log(`📂 Resuming Claude session: ${sessionId}`);
+      }
+    }
+    if (args.includes('--model')) {
+      const modelIndex = args.indexOf('--model');
+      const model = args[modelIndex + 1];
+      if (model) {
+        console.log(`🤖 Using model: ${model}`);
+      }
+    }
   }
   
-  // Pass through to Claude with git tracking
+  // Pass through ALL arguments to Claude CLI transparently
+  // This includes: -c, --continue, -r, --resume, --model, --dangerously-skip-permissions, etc.
   await handleClaudeSession(args);
 }
 
