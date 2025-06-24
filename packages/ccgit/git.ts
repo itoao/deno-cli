@@ -90,9 +90,14 @@ export async function commitChanges(
 
 export async function getCommitsBySessionId(sessionId: string): Promise<string[]> {
   try {
-    const result = await $`git log --grep="Session-ID: ${sessionId}" --format=%H`.text();
-    return result.trim().split('\n').filter(Boolean);
-  } catch {
+    console.log(`[DEBUG] Searching for sessionId: ${sessionId}`);
+    const result = await $`git log --grep="Session-ID: ${sessionId}" --format=%H --all`.text();
+    console.log(`[DEBUG] Raw git log result: "${result}"`);
+    const commits = result.trim().split('\n').filter(Boolean);
+    console.log(`[DEBUG] Parsed commits:`, commits);
+    return commits;
+  } catch (error) {
+    console.log(`[DEBUG] Error in getCommitsBySessionId:`, error);
     return [];
   }
 }
