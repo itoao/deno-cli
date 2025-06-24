@@ -1,13 +1,15 @@
 # Git Commit With LLM CLI
 
-ステージングされたファイルを適切なコミット粒度に自動分割し、Claude AIが生成したタイトルでコミットを作成するCLIツールです。
+ステージングされたファイルを適切なコミット粒度に自動分割し、Claude
+AIが生成したタイトルでコミットを作成するCLIツールです。
 
 ## 機能
 
 - **自動ファイル検出**: ステージングされたファイルを自動で検出
 - **コミットの分割**: Claude Code SDKを使用して適切な粒度でコミットを分割
 - **AI生成タイトル**: Claude Code SDKを使用して適切なコミットタイトルを自動生成
-- **Conventional Commits**: `feat:`, `fix:`, `docs:`などの標準的なフォーマットに対応
+- **Conventional Commits**: `feat:`, `fix:`,
+  `docs:`などの標準的なフォーマットに対応
 
 ## 必要な環境
 
@@ -78,6 +80,7 @@ $ deno task run
 ## エラー対処
 
 ### "No staged files found"
+
 ```bash
 # ファイルをステージングしてから実行してください
 git add <ファイル名>
@@ -85,6 +88,7 @@ deno task run
 ```
 
 ### "Failed to get git diff --cached"
+
 - Git リポジトリ内で実行されているか確認してください
 - Git がインストールされているか確認してください
 

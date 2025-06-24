@@ -1,41 +1,41 @@
-export { 
-  generateCommitTitle,
+export {
   categorizeFiles,
-  generateFallbackTitle
+  generateCommitTitle,
+  generateFallbackTitle,
 } from "./commit-title-generator.ts";
 
 export type {
-  SessionMetadata,
-  GitCommitInfo,
   ClaudeOutput,
-  GitFileChange
+  GitCommitInfo,
+  GitFileChange,
+  SessionMetadata,
 } from "./types.ts";
 
 export {
-  getGitRoot,
-  executeGitCommand,
-  hasUncommittedChanges,
-  stashChanges,
-  popStash,
-  getStagedFiles,
-  getGitStagedFiles,
-  commitChanges,
-  getCommitsBySessionId,
   checkoutCommit,
+  commitChanges,
   createBranch,
+  createCommit,
+  executeGitCommand,
+  getCommitsBySessionId,
   getFileContent,
   getFileDiff,
+  getGitRoot,
+  getGitStagedFiles,
+  getStagedFiles,
   hasChangesToCommit,
-  createCommit
+  hasUncommittedChanges,
+  popStash,
+  stashChanges,
 } from "./git-operations.ts";
 
 export {
+  AppError,
+  type ErrorHandlerOptions,
   handleError,
+  handleGitError,
+  rethrowError,
+  warn,
   withErrorHandling,
   withSyncErrorHandling,
-  handleGitError,
-  warn,
-  rethrowError,
-  AppError,
-  type ErrorHandlerOptions
 } from "./error-handler.ts";

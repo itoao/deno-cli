@@ -16,11 +16,11 @@ export interface ErrorHandlerOptions {
 export class AppError extends Error {
   constructor(
     message: string,
-    public readonly code: string = 'UNKNOWN_ERROR',
-    public readonly exitCode: number = 1
+    public readonly code: string = "UNKNOWN_ERROR",
+    public readonly exitCode: number = 1,
   ) {
     super(message);
-    this.name = 'AppError';
+    this.name = "AppError";
   }
 }
 
@@ -29,13 +29,13 @@ export class AppError extends Error {
  */
 export function handleError(
   error: unknown,
-  options: ErrorHandlerOptions = {}
+  options: ErrorHandlerOptions = {},
 ): void {
   const {
-    prefix = '❌ Error',
+    prefix = "❌ Error",
     verbose = false,
     exitCode = 1,
-    logError = true
+    logError = true,
   } = options;
 
   let message: string;
@@ -64,7 +64,7 @@ export function handleError(
  */
 export async function withErrorHandling<T>(
   fn: () => Promise<T>,
-  options: ErrorHandlerOptions = {}
+  options: ErrorHandlerOptions = {},
 ): Promise<T | undefined> {
   try {
     return await fn();
@@ -79,7 +79,7 @@ export async function withErrorHandling<T>(
  */
 export function withSyncErrorHandling<T>(
   fn: () => T,
-  options: ErrorHandlerOptions = {}
+  options: ErrorHandlerOptions = {},
 ): T | undefined {
   try {
     return fn();
@@ -95,20 +95,20 @@ export function withSyncErrorHandling<T>(
 export function handleGitError(
   error: unknown,
   command: string,
-  options: Partial<ErrorHandlerOptions> = {}
+  options: Partial<ErrorHandlerOptions> = {},
 ): void {
   const gitOptions: ErrorHandlerOptions = {
     prefix: `❌ Git command failed: ${command}`,
-    ...options
+    ...options,
   };
-  
+
   handleError(error, gitOptions);
 }
 
 /**
  * 警告メッセージを表示する関数
  */
-export function warn(message: string, prefix = '⚠️'): void {
+export function warn(message: string, prefix = "⚠️"): void {
   console.warn(`${prefix} ${message}`);
 }
 
@@ -118,7 +118,7 @@ export function warn(message: string, prefix = '⚠️'): void {
 export function rethrowError(
   error: unknown,
   context: string,
-  code?: string
+  code?: string,
 ): never {
   if (error instanceof Error) {
     throw new AppError(`${context}: ${error.message}`, code);

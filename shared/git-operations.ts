@@ -17,7 +17,11 @@ export async function executeGitCommand(args: string[]): Promise<string> {
     const result = await $`git ${args}`.cwd(gitRoot).text();
     return result;
   } catch (error) {
-    rethrowError(error, `Git command failed: git ${args.join(' ')}`, "GIT_COMMAND_ERROR");
+    rethrowError(
+      error,
+      `Git command failed: git ${args.join(" ")}`,
+      "GIT_COMMAND_ERROR",
+    );
   }
 }
 
@@ -55,11 +59,11 @@ export async function popStash(): Promise<void> {
 export async function getStagedFiles(): Promise<GitFileChange[]> {
   try {
     const statusOutput = await $`git diff --cached --name-status`.text();
-    const statusLines = statusOutput.split('\n').filter(l => l.trim());
-    
-    return statusLines.map(line => {
-      const [status, path] = line.split('\t');
-      return { path, status: status as GitFileChange['status'] };
+    const statusLines = statusOutput.split("\n").filter((l) => l.trim());
+
+    return statusLines.map((line) => {
+      const [status, path] = line.split("\t");
+      return { path, status: status as GitFileChange["status"] };
     });
   } catch (error) {
     rethrowError(error, "Failed to get staged files", "GIT_STAGED_FILES_ERROR");
@@ -68,23 +72,27 @@ export async function getStagedFiles(): Promise<GitFileChange[]> {
 
 export async function getGitStagedFiles(): Promise<GitFileChange[]> {
   try {
-    const statusOutput = await executeGitCommand(["diff", "--cached", "--name-status"]);
-    const statusLines = statusOutput.split('\n').filter(l => l.trim());
-    
+    const statusOutput = await executeGitCommand([
+      "diff",
+      "--cached",
+      "--name-status",
+    ]);
+    const statusLines = statusOutput.split("\n").filter((l) => l.trim());
+
     if (statusLines.length === 0) {
       return [];
     }
-    
+
     const filePromises = statusLines.map(async (line) => {
-      const parts = line.split('\t');
+      const parts = line.split("\t");
       if (parts.length < 2) return null;
-      
-      const status = parts[0] as GitFileChange['status'];
+
+      const status = parts[0] as GitFileChange["status"];
       const path = parts[1];
-      
+
       try {
         let diff: string;
-        if (status === 'A') {
+        if (status === "A") {
           // For new files, use git show to get the content
           diff = await executeGitCommand(["show", `--format=`, `:${path}`]);
         } else {
@@ -93,11 +101,15 @@ export async function getGitStagedFiles(): Promise<GitFileChange[]> {
         }
         return { path, status, diff } as GitFileChange;
       } catch (error) {
-        warn(`Failed to get diff for ${path}: ${error instanceof Error ? error.message : String(error)}`);
-        return { path, status, diff: '' };
+        warn(
+          `Failed to get diff for ${path}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        return { path, status, diff: "" };
       }
     });
-    
+
     const results = await Promise.all(filePromises);
     return results.filter((file): file is GitFileChange => file !== null);
   } catch (error) {
@@ -107,12 +119,12 @@ export async function getGitStagedFiles(): Promise<GitFileChange[]> {
 
 export async function commitChanges(
   title: string,
-  metadata: SessionMetadata
+  metadata: SessionMetadata,
 ): Promise<void> {
   try {
     // Stage all changes
     await $`git add -A`.quiet();
-    
+
     // Check if there are staged changes to commit
     try {
       await $`git diff --cached --quiet`.quiet();
@@ -121,27 +133,31 @@ export async function commitChanges(
     } catch {
       // Error means there are staged changes, proceed with commit
     }
-    
+
     // Build commit message with metadata
     const message = [
       title,
-      '',
+      "",
       `Session-ID: ${metadata.sessionId}`,
-      metadata.prompt ? `Prompt: "${metadata.prompt}"` : '',
+      metadata.prompt ? `Prompt: "${metadata.prompt}"` : "",
       `Time: ${metadata.timestamp}`,
-      metadata.resumedFrom ? `Resumed-From: ${metadata.resumedFrom}` : '',
-    ].filter(Boolean).join('\n');
-    
+      metadata.resumedFrom ? `Resumed-From: ${metadata.resumedFrom}` : "",
+    ].filter(Boolean).join("\n");
+
     await $`git commit -m ${message}`.quiet();
   } catch (error) {
     rethrowError(error, "Failed to commit changes", "GIT_COMMIT_ERROR");
   }
 }
 
-export async function getCommitsBySessionId(sessionId: string): Promise<string[]> {
+export async function getCommitsBySessionId(
+  sessionId: string,
+): Promise<string[]> {
   try {
-    const result = await $`git log --grep='Session-ID: ${sessionId}' --format=%H --all`.text();
-    return result.trim().split('\n').filter(Boolean);
+    const result =
+      await $`git log --grep='Session-ID: ${sessionId}' --format=%H --all`
+        .text();
+    return result.trim().split("\n").filter(Boolean);
   } catch {
     return [];
   }
@@ -193,19 +209,22 @@ export async function hasChangesToCommit(): Promise<boolean> {
   }
 }
 
-export async function createCommit(files: GitFileChange[], title: string): Promise<void> {
-  const filePaths = files.map(f => f.path);
-  
+export async function createCommit(
+  files: GitFileChange[],
+  title: string,
+): Promise<void> {
+  const filePaths = files.map((f) => f.path);
+
   try {
     await executeGitCommand(["reset"]);
     await executeGitCommand(["add", ...filePaths]);
-    
+
     const hasChanges = await hasChangesToCommit();
     if (!hasChanges) {
-      console.log(`⚠️ No changes to commit for: ${filePaths.join(', ')}`);
+      console.log(`⚠️ No changes to commit for: ${filePaths.join(", ")}`);
       return;
     }
-    
+
     await executeGitCommand(["commit", "-m", title]);
     console.log(`✅ ${title}`);
   } catch (error) {

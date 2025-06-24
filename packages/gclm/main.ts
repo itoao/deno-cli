@@ -1,18 +1,17 @@
 import { parseArgs } from "node:util";
 import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code";
-import { 
-  generateCommitTitle, 
-  categorizeFiles, 
-  type GitFileChange,
-  getGitStagedFiles,  
-  hasChangesToCommit,
+import {
+  categorizeFiles,
   createCommit,
   executeGitCommand,
+  generateCommitTitle,
+  getGitStagedFiles,
+  type GitFileChange,
   handleError,
+  hasChangesToCommit,
   warn,
-  withErrorHandling
+  withErrorHandling,
 } from "../../shared/index.ts";
-
 
 interface Config {
   maxDiffPreviewLines: number;
@@ -31,19 +30,22 @@ const CONFIG: Config = {
 };
 
 function createFilePreview(file: GitFileChange): string {
-  const diffLines = file.diff ? file.diff.split('\n') : [];
-  const preview = diffLines.slice(0, CONFIG.maxDiffPreviewLines).join('\n');
+  const diffLines = file.diff ? file.diff.split("\n") : [];
+  const preview = diffLines.slice(0, CONFIG.maxDiffPreviewLines).join("\n");
   return `- ${file.path} (${file.status})\n  Changes: ${preview}`;
 }
 
-async function groupFilesByLLM(files: GitFileChange[]): Promise<GitFileChange[][]> {
+async function groupFilesByLLM(
+  files: GitFileChange[],
+): Promise<GitFileChange[][]> {
   if (files.length === 0) {
     return [];
   }
-  
-  const fileList = files.map(createFilePreview).join('\n\n');
-  
-  const prompt = `Analyze these staged git files and group them into logical commits. Each group should be a cohesive set of changes.
+
+  const fileList = files.map(createFilePreview).join("\n\n");
+
+  const prompt =
+    `Analyze these staged git files and group them into logical commits. Each group should be a cohesive set of changes.
 
 Files:
 ${fileList}
@@ -68,30 +70,36 @@ Return ONLY the JSON array, no other text.`;
   try {
     const messages: SDKMessage[] = [];
     const abortController = new AbortController();
-    
-    for await (const message of query({
-      prompt,
-      abortController,
-      options: CONFIG.queryOptions,
-    })) {
+
+    for await (
+      const message of query({
+        prompt,
+        abortController,
+        options: CONFIG.queryOptions,
+      })
+    ) {
       messages.push(message);
     }
-    
+
     const groupPaths = extractGroupPathsFromMessages(messages);
     if (!groupPaths) {
       throw new Error("No valid response found in messages");
     }
-    
+
     return convertPathsToFileGroups(groupPaths, files);
   } catch (error) {
-    warn(`LLM grouping failed, using simple fallback: ${error instanceof Error ? error.message : String(error)}`);
+    warn(
+      `LLM grouping failed, using simple fallback: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
     return fallbackGrouping(files);
   }
 }
 
 /**
  * AIから受信したメッセージ群からファイルパスのグループ化情報を抽出する関数
- * 
+ *
  * 処理内容:
  * 1. メッセージを逆順で検索 - 最新のメッセージから順にチェック（最後の応答が最も重要）
  * 2. メッセージタイプ別の処理
@@ -100,23 +108,25 @@ Return ONLY the JSON array, no other text.`;
  * 3. JSON抽出とパース
  *    - 正規表現で[...]形式のJSON配列を検索
  *    - 余分なテキストがあってもJSON部分だけを抽出
- * 
+ *
  * 期待する返り値:
  * [
  *   ["file1.ts", "file2.ts"],    // グループ1
  *   ["config.json"],             // グループ2
  *   ["README.md"]                // グループ3
  * ]
- * 
+ *
  * つまり、AIが「どのファイルを一緒にコミットすべきか」を判断した結果を、
  * プログラムが使える配列形式に変換する処理
  */
-function extractGroupPathsFromMessages(messages: SDKMessage[]): string[][] | null {
+function extractGroupPathsFromMessages(
+  messages: SDKMessage[],
+): string[][] | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
-    
+
     try {
-      if (message.type === 'result' && 'result' in message && message.result) {
+      if (message.type === "result" && "result" in message && message.result) {
         const groupsText = String(message.result).trim();
         // Try to extract JSON from the text if it contains extra content
         const jsonMatch = groupsText.match(/\[[\s\S]*\]/);
@@ -125,10 +135,13 @@ function extractGroupPathsFromMessages(messages: SDKMessage[]): string[][] | nul
         }
         return JSON.parse(groupsText);
       }
-      
-      if (message.type === 'assistant' && 'message' in message && message.message?.content) {
+
+      if (
+        message.type === "assistant" && "message" in message &&
+        message.message?.content
+      ) {
         for (const content of message.message.content) {
-          if (content.type === 'text' && content.text) {
+          if (content.type === "text" && content.text) {
             const groupsText = String(content.text).trim();
             // Try to extract JSON from the text if it contains extra content
             const jsonMatch = groupsText.match(/\[[\s\S]*\]/);
@@ -144,14 +157,17 @@ function extractGroupPathsFromMessages(messages: SDKMessage[]): string[][] | nul
       continue;
     }
   }
-  
+
   return null;
 }
 
-function convertPathsToFileGroups(groupPaths: string[][], files: GitFileChange[]): GitFileChange[][] {
-  const fileMap = new Map(files.map(f => [f.path, f]));
+function convertPathsToFileGroups(
+  groupPaths: string[][],
+  files: GitFileChange[],
+): GitFileChange[][] {
+  const fileMap = new Map(files.map((f) => [f.path, f]));
   const groups: GitFileChange[][] = [];
-  
+
   for (const pathGroup of groupPaths) {
     const group: GitFileChange[] = [];
     for (const path of pathGroup) {
@@ -164,35 +180,38 @@ function convertPathsToFileGroups(groupPaths: string[][], files: GitFileChange[]
       groups.push(group);
     }
   }
-  
+
   const groupedPaths = new Set(groupPaths.flat());
-  const ungroupedFiles = files.filter(f => !groupedPaths.has(f.path));
+  const ungroupedFiles = files.filter((f) => !groupedPaths.has(f.path));
   if (ungroupedFiles.length > 0) {
     groups.push(ungroupedFiles);
   }
-  
+
   return groups;
 }
-
 
 function fallbackGrouping(files: GitFileChange[]): GitFileChange[][] {
   const categories = categorizeFiles(files);
   const groups: GitFileChange[][] = [];
-  
-  const order = ['config', 'docs', 'other', 'test', 'build'] as const;
+
+  const order = ["config", "docs", "other", "test", "build"] as const;
   for (const category of order) {
     if (categories[category].length > 0) {
       groups.push(categories[category]);
     }
   }
-  
+
   return groups.length > 0 ? groups : [files];
 }
 
-async function processCommitGroup(group: GitFileChange[], index: number, total: number): Promise<void> {
+async function processCommitGroup(
+  group: GitFileChange[],
+  index: number,
+  total: number,
+): Promise<void> {
   console.log(`\n📝 Commit ${index + 1}/${total}:`);
-  console.log(`   Files: ${group.map(f => f.path).join(', ')}`);
-  
+  console.log(`   Files: ${group.map((f) => f.path).join(", ")}`);
+
   const title = await generateCommitTitle(group, {
     maxCommitTitleLength: CONFIG.maxCommitTitleLength,
     maxDiffPreviewLines: CONFIG.maxDiffPreviewLines,
@@ -246,16 +265,16 @@ Make sure to stage your files with 'git add' before running gclm.
       console.log("🔍 Analyzing staged files...");
     }
     const stagedFiles = await getGitStagedFiles();
-    
+
     if (stagedFiles.length === 0) {
       console.log("❌ No staged files found. Use 'git add' first.");
       return;
     }
-    
+
     if (parsed.values.verbose) {
       console.log(`📁 Found ${stagedFiles.length} staged files`);
     }
-    
+
     if (stagedFiles.length === 1) {
       if (parsed.values.verbose) {
         console.log("📝 Single file found, creating single commit...");
@@ -269,7 +288,7 @@ Make sure to stage your files with 'git add' before running gclm.
       console.log("\n🎉 Commit created!");
       return;
     }
-    
+
     if (parsed.values.verbose) {
       console.log("🧠 Using AI to group files into logical commits...");
     }
@@ -277,13 +296,12 @@ Make sure to stage your files with 'git add' before running gclm.
     if (parsed.values.verbose) {
       console.log(`📦 AI suggested ${groups.length} logical commits`);
     }
-    
+
     for (let i = 0; i < groups.length; i++) {
       await processCommitGroup(groups[i], i, groups.length);
     }
-    
+
     console.log("\n🎉 All commits created!");
-    
   } catch (error) {
     handleError(error, { prefix: "❌ Error", exitCode: 1 });
   }
@@ -291,17 +309,18 @@ Make sure to stage your files with 'git add' before running gclm.
 
 Deno.test("JSONレスポンスからファイルグループを抽出する", () => {
   const messages = [
-    { type: 'result', result: '[["file1.ts", "file2.ts"], ["config.json"]]' }
+    { type: "result", result: '[["file1.ts", "file2.ts"], ["config.json"]]' },
   ] as SDKMessage[];
-  
+
   const result = extractGroupPathsFromMessages(messages);
   const expected = [["file1.ts", "file2.ts"], ["config.json"]];
-  
+
   if (JSON.stringify(result) !== JSON.stringify(expected)) {
-    throw new Error(`Expected ${JSON.stringify(expected)}, got ${JSON.stringify(result)}`);
+    throw new Error(
+      `Expected ${JSON.stringify(expected)}, got ${JSON.stringify(result)}`,
+    );
   }
 });
-
 
 if (import.meta.main) {
   main();

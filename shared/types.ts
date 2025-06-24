@@ -20,6 +20,6 @@ export interface ClaudeOutput {
 
 export interface GitFileChange {
   path: string;
-  status: 'A' | 'M' | 'D' | 'R' | 'C' | 'U' | 'T';
+  status: "A" | "M" | "D" | "R" | "C" | "U" | "T";
   diff?: string;
 }

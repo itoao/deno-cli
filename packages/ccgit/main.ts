@@ -7,7 +7,11 @@ import { handleError } from "../../shared/error-handler.ts";
 // Constants
 const DEBOUNCE_DELAY = 500;
 const MIN_COMMIT_INTERVAL = 400;
-const CLAUDE_ENV_VARS = ["CLAUDECODE", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_ENTRYPOINT"];
+const CLAUDE_ENV_VARS = [
+  "CLAUDECODE",
+  "CLAUDE_CODE_SSE_PORT",
+  "CLAUDE_CODE_ENTRYPOINT",
+];
 
 interface FileWatcherOptions {
   watcher: Deno.FsWatcher;
@@ -25,12 +29,12 @@ interface ClaudeProcessOptions {
 
 function cleanEnvironment(): Record<string, string> {
   const env = { ...Deno.env.toObject() };
-  CLAUDE_ENV_VARS.forEach(varName => delete env[varName]);
+  CLAUDE_ENV_VARS.forEach((varName) => delete env[varName]);
   return env;
 }
 
 function hasPromptArgument(args: string[]): boolean {
-  return args.some(arg => !arg.startsWith('-') && !arg.startsWith('/'));
+  return args.some((arg) => !arg.startsWith("-") && !arg.startsWith("/"));
 }
 
 async function commitFileChanges(metadata: {
@@ -45,16 +49,16 @@ async function commitFileChanges(metadata: {
   const changedFiles = await git.getStagedFiles();
   await Promise.all(
     changedFiles.map(async (file) => {
-      let diff = '';
+      let diff = "";
       try {
-        if (file.status === 'A') {
+        if (file.status === "A") {
           diff = await git.getFileContent(file.path);
         } else {
           diff = await git.getFileDiff(file.path);
         }
       } catch {}
       return { ...file, diff };
-    })
+    }),
   );
 
   const title = `Claude Chat Session: ${metadata.sessionId}`;
@@ -78,7 +82,7 @@ async function watchFileChanges(options: FileWatcherOptions): Promise<void> {
   async function commitIfChanged() {
     if (options.commitInProgress) return;
     options.commitInProgress = true;
-    
+
     try {
       const metadata = {
         sessionId: `fswatch-${Date.now()}`,
@@ -98,7 +102,10 @@ async function watchFileChanges(options: FileWatcherOptions): Promise<void> {
     if (["modify", "create", "remove"].includes(event.kind)) {
       options.changeBuffer = true;
       setTimeout(async () => {
-        if (options.changeBuffer && Date.now() - options.lastCommitTime > MIN_COMMIT_INTERVAL) {
+        if (
+          options.changeBuffer &&
+          Date.now() - options.lastCommitTime > MIN_COMMIT_INTERVAL
+        ) {
           options.changeBuffer = false;
           await commitIfChanged();
         }
@@ -107,7 +114,9 @@ async function watchFileChanges(options: FileWatcherOptions): Promise<void> {
   }
 }
 
-async function runClaudeProcess(options: ClaudeProcessOptions): Promise<ClaudeOutput> {
+async function runClaudeProcess(
+  options: ClaudeProcessOptions,
+): Promise<ClaudeOutput> {
   const cmd = new Deno.Command("claude", {
     args: options.args,
     stdout: options.isInteractive ? "inherit" : "piped",
@@ -134,7 +143,7 @@ async function runClaudeProcess(options: ClaudeProcessOptions): Promise<ClaudeOu
   ]);
 
   const status = await process.status;
-  
+
   return {
     stdout,
     stderr,
@@ -142,7 +151,10 @@ async function runClaudeProcess(options: ClaudeProcessOptions): Promise<ClaudeOu
   };
 }
 
-async function readStream(stream: ReadableStream<Uint8Array>, toStdout: boolean): Promise<string> {
+async function readStream(
+  stream: ReadableStream<Uint8Array>,
+  toStdout: boolean,
+): Promise<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let result = "";
@@ -150,10 +162,10 @@ async function readStream(stream: ReadableStream<Uint8Array>, toStdout: boolean)
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    
+
     const chunk = decoder.decode(value);
     result += chunk;
-    
+
     if (toStdout) {
       Deno.stdout.write(value);
     } else {
@@ -166,14 +178,14 @@ async function readStream(stream: ReadableStream<Uint8Array>, toStdout: boolean)
 
 async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
   const fileWatcher = createFileWatcher();
-  
+
   // Start file watching in background
   const watchPromise = watchFileChanges(fileWatcher);
 
   try {
     const env = cleanEnvironment();
     const isInteractive = !hasPromptArgument(args);
-    
+
     const output = await runClaudeProcess({
       args,
       isInteractive,
@@ -182,13 +194,13 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
 
     // Stop file watcher
     fileWatcher.watcherActive = false;
-    
+
     return output;
   } catch (error) {
     fileWatcher.watcherActive = false;
     const errorMessage = error instanceof Error ? error.message : String(error);
     return {
-      stdout: '',
+      stdout: "",
       stderr: errorMessage,
       exitCode: 1,
     };
@@ -197,7 +209,7 @@ async function runClaudeWithMonitoring(args: string[]): Promise<ClaudeOutput> {
 
 async function runClaudeDirectly(args: string[]): Promise<void> {
   const env = cleanEnvironment();
-  
+
   if (args.length === 0) {
     await $`claude`.env(env).spawn();
   } else {
@@ -216,7 +228,7 @@ async function handleClaudeSession(args: string[]): Promise<void> {
   }
 
   const isInteractiveMode = !hasPromptArgument(args);
-  
+
   try {
     console.log("🚀 Starting Claude session with auto-commit...");
     const output = await runClaudeWithMonitoring(args);
@@ -224,11 +236,16 @@ async function handleClaudeSession(args: string[]): Promise<void> {
   } catch (error) {
     if (isInteractiveMode) {
       console.error(`❌ Claude CLI execution failed: ${error}`);
-      console.log(`ℹ️  Try running 'claude doctor' to diagnose Claude CLI issues`);
+      console.log(
+        `ℹ️  Try running 'claude doctor' to diagnose Claude CLI issues`,
+      );
       console.log(`ℹ️  Or run 'claude' directly to test Claude CLI`);
       console.log(`ℹ️  Args passed to claude: ${JSON.stringify(args)}`);
     } else {
-      handleError(error, { prefix: 'Error running Claude session', exitCode: 1 });
+      handleError(error, {
+        prefix: "Error running Claude session",
+        exitCode: 1,
+      });
     }
     Deno.exit(1);
   }
@@ -250,7 +267,7 @@ Examples:
 
 Claude CLI Options (all passed through transparently):
 `);
-  
+
   // Show Claude's help by running claude --help
   try {
     const cmd = new Deno.Command("claude", {
@@ -258,42 +275,48 @@ Claude CLI Options (all passed through transparently):
       stdout: "piped",
       stderr: "piped",
     });
-    
+
     const output = await cmd.output();
     const claudeHelp = new TextDecoder().decode(output.stdout);
-    
+
     // Extract and display the options section from Claude's help
-    const lines = claudeHelp.split('\n');
+    const lines = claudeHelp.split("\n");
     let inOptionsSection = false;
     let optionsFound = false;
-    
+
     for (const line of lines) {
       // Detect start of options section
-      if (line.toLowerCase().includes('options:') || line.toLowerCase().includes('flags:')) {
+      if (
+        line.toLowerCase().includes("options:") ||
+        line.toLowerCase().includes("flags:")
+      ) {
         inOptionsSection = true;
         optionsFound = true;
         continue;
       }
-      
+
       if (inOptionsSection) {
         // Stop at next major section (non-indented line that's not empty)
-        if (line.trim() && !line.startsWith(' ') && !line.startsWith('\t')) {
+        if (line.trim() && !line.startsWith(" ") && !line.startsWith("\t")) {
           break;
         }
-        
+
         // Show option lines, replacing 'claude' with 'ccgit' in examples
         if (line.trim()) {
-          let modifiedLine = line.replace(/claude\s+/g, 'ccgit ');
-          
+          let modifiedLine = line.replace(/claude\s+/g, "ccgit ");
+
           // Add extra spacing between option and description for better readability
           // Match pattern like "  -c, --continue                  Continue..."
-          modifiedLine = modifiedLine.replace(/^(\s*)(-[^A-Z]*?)(\s{2,})([A-Z])/g, '$1  $2$3      $4');
-          
+          modifiedLine = modifiedLine.replace(
+            /^(\s*)(-[^A-Z]*?)(\s{2,})([A-Z])/g,
+            "$1  $2$3      $4",
+          );
+
           console.log(`  ${modifiedLine.trim()}`);
         }
       }
     }
-    
+
     if (!optionsFound) {
       console.log("  (Run 'claude --help' for complete Claude CLI options)");
     }
@@ -305,51 +328,51 @@ Claude CLI Options (all passed through transparently):
 function showInteractiveInfo(args: string[]): void {
   console.log(`🚀 Starting Claude interactive session with auto-commit...`);
   console.log(`🎯 Interactive mode with auto-commit enabled`);
-  
+
   // Show specific options being passed
-  if (args.includes('--dangerously-skip-permissions')) {
+  if (args.includes("--dangerously-skip-permissions")) {
     console.log(`⚠️  --dangerously-skip-permissions enabled for this session`);
   }
-  
-  if (args.includes('-c') || args.includes('--continue')) {
+
+  if (args.includes("-c") || args.includes("--continue")) {
     console.log(`↩️  Continuing last Claude conversation`);
   }
-  
-  if (args.includes('-r') || args.includes('--resume')) {
-    const resumeIndex = Math.max(args.indexOf('-r'), args.indexOf('--resume'));
+
+  if (args.includes("-r") || args.includes("--resume")) {
+    const resumeIndex = Math.max(args.indexOf("-r"), args.indexOf("--resume"));
     const sessionId = args[resumeIndex + 1];
     if (sessionId) {
       console.log(`📂 Resuming Claude session: ${sessionId}`);
     }
   }
-  
-  if (args.includes('--model')) {
-    const modelIndex = args.indexOf('--model');
+
+  if (args.includes("--model")) {
+    const modelIndex = args.indexOf("--model");
     const model = args[modelIndex + 1];
     if (model) {
       console.log(`🤖 Using model: ${model}`);
     }
   }
-  
-  if (args.includes('/orchestrator')) {
+
+  if (args.includes("/orchestrator")) {
     console.log(`🎼 Orchestrator mode enabled`);
   }
 }
 
 async function main() {
   const args = Deno.args;
-  
+
   // Handle help
-  if (args.includes('--help') || args.includes('-h')) {
+  if (args.includes("--help") || args.includes("-h")) {
     await showHelp();
     return;
   }
-  
+
   // Show interactive mode info
   if (!hasPromptArgument(args)) {
     showInteractiveInfo(args);
   }
-  
+
   // Pass through to Claude
   await handleClaudeSession(args);
 }
