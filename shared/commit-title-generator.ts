@@ -25,13 +25,18 @@ const FILE_TYPE_PATTERNS = {
   test: (path: string) =>
     path.includes("test") || path.includes("spec") ||
     path.endsWith(".test.ts") || path.endsWith(".spec.ts"),
-  docs: (path: string) =>
-    path.endsWith(".md") || path.endsWith(".rst") || path.includes("docs/"),
+  docs: (path: string) => path.endsWith(".md") || path.endsWith(".rst") || path.includes("docs/"),
   build: (path: string) =>
     path.includes("build") || path.includes("dist") || path.endsWith(".lock"),
 } as const;
 
-function categorizeFiles(files: GitFileChange[]) {
+function categorizeFiles(files: GitFileChange[]): {
+  config: GitFileChange[];
+  test: GitFileChange[];
+  docs: GitFileChange[];
+  build: GitFileChange[];
+  other: GitFileChange[];
+} {
   const categories = {
     config: [] as GitFileChange[],
     test: [] as GitFileChange[],
@@ -78,9 +83,7 @@ function createCommitPrompt(
   const fileList = files.map((f) => `${f.path} (${f.status})`).join("\n");
   const diffSample = files
     .filter((f) => f.diff)
-    .map((f) =>
-      f.diff!.split("\n").slice(0, config.maxDiffPreviewLines).join("\n")
-    )
+    .map((f) => (f.diff ?? "").split("\n").slice(0, config.maxDiffPreviewLines).join("\n"))
     .join("\n---\n");
 
   return `Generate a concise commit title for these changes:

@@ -7,8 +7,9 @@ import {
   getGitStagedFiles,
   type GitFileChange,
   handleError,
+  logger,
   warn,
-} from "@deno-cli/shared";
+} from "../../shared/index.ts";
 
 interface Config {
   maxDiffPreviewLines: number;
@@ -206,8 +207,8 @@ async function processCommitGroup(
   index: number,
   total: number,
 ): Promise<void> {
-  console.log(`\n📝 Commit ${index + 1}/${total}:`);
-  console.log(`   Files: ${group.map((f) => f.path).join(", ")}`);
+  logger.log(`\n📝 Commit ${index + 1}/${total}:`);
+  logger.log(`   Files: ${group.map((f) => f.path).join(", ")}`);
 
   const title = await generateCommitTitle(group, {
     maxCommitTitleLength: CONFIG.maxCommitTitleLength,
@@ -217,7 +218,7 @@ async function processCommitGroup(
   await createCommit(group, title);
 }
 
-async function main() {
+async function main(): Promise<void> {
   const parsed = parseArgs({
     options: {
       help: {
@@ -237,7 +238,7 @@ async function main() {
   });
 
   if (parsed.values.help) {
-    console.log(`Git Commit LLM (gclm) - AI-powered git commit tool
+    logger.log(`Git Commit LLM (gclm) - AI-powered git commit tool
 
 Usage: gclm [options]
 
@@ -253,28 +254,28 @@ Make sure to stage your files with 'git add' before running gclm.
   }
 
   if (parsed.values.version) {
-    console.log("gclm version 1.0.0");
+    logger.log("gclm version 1.0.0");
     return;
   }
 
   try {
     if (parsed.values.verbose) {
-      console.log("🔍 Analyzing staged files...");
+      logger.log("🔍 Analyzing staged files...");
     }
     const stagedFiles = await getGitStagedFiles();
 
     if (stagedFiles.length === 0) {
-      console.log("❌ No staged files found. Use 'git add' first.");
+      logger.log("❌ No staged files found. Use 'git add' first.");
       return;
     }
 
     if (parsed.values.verbose) {
-      console.log(`📁 Found ${stagedFiles.length} staged files`);
+      logger.log(`📁 Found ${stagedFiles.length} staged files`);
     }
 
     if (stagedFiles.length === 1) {
       if (parsed.values.verbose) {
-        console.log("📝 Single file found, creating single commit...");
+        logger.log("📝 Single file found, creating single commit...");
       }
       const title = await generateCommitTitle(stagedFiles, {
         maxCommitTitleLength: CONFIG.maxCommitTitleLength,
@@ -282,23 +283,25 @@ Make sure to stage your files with 'git add' before running gclm.
         queryOptions: CONFIG.queryOptions,
       });
       await createCommit(stagedFiles, title);
-      console.log("\n🎉 Commit created!");
+      logger.log("\n🎉 Commit created!");
       return;
     }
 
     if (parsed.values.verbose) {
-      console.log("🧠 Using AI to group files into logical commits...");
+      logger.log("🧠 Using AI to group files into logical commits...");
     }
     const groups = await groupFilesByLLM(stagedFiles);
     if (parsed.values.verbose) {
-      console.log(`📦 AI suggested ${groups.length} logical commits`);
+      logger.log(`📦 AI suggested ${groups.length} logical commits`);
     }
 
-    for (let i = 0; i < groups.length; i++) {
-      await processCommitGroup(groups[i], i, groups.length);
-    }
+    // Process commits sequentially to maintain git history consistency
+    await groups.reduce(async (prev, group, i) => {
+      await prev;
+      await processCommitGroup(group, i, groups.length);
+    }, Promise.resolve());
 
-    console.log("\n🎉 All commits created!");
+    logger.log("\n🎉 All commits created!");
   } catch (error) {
     handleError(error, { prefix: "❌ Error", exitCode: 1 });
   }

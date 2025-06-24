@@ -1,6 +1,7 @@
 import { $ } from "jsr:@david/dax@0.40.0";
 import type { GitFileChange, SessionMetadata } from "./types.ts";
 import { rethrowError, warn } from "./error-handler.ts";
+import { logger } from "./logger.ts";
 
 export async function getGitRoot(): Promise<string> {
   try {
@@ -154,9 +155,8 @@ export async function getCommitsBySessionId(
   sessionId: string,
 ): Promise<string[]> {
   try {
-    const result =
-      await $`git log --grep='Session-ID: ${sessionId}' --format=%H --all`
-        .text();
+    const result = await $`git log --grep='Session-ID: ${sessionId}' --format=%H --all`
+      .text();
     return result.trim().split("\n").filter(Boolean);
   } catch {
     return [];
@@ -221,12 +221,12 @@ export async function createCommit(
 
     const hasChanges = await hasChangesToCommit();
     if (!hasChanges) {
-      console.log(`⚠️ No changes to commit for: ${filePaths.join(", ")}`);
+      logger.warn(`No changes to commit for: ${filePaths.join(", ")}`);
       return;
     }
 
     await executeGitCommand(["commit", "-m", title]);
-    console.log(`✅ ${title}`);
+    logger.log(`✅ ${title}`);
   } catch (error) {
     rethrowError(error, "Failed to create commit", "GIT_CREATE_COMMIT_ERROR");
   }

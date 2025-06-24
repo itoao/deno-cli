@@ -39,3 +39,5 @@ export {
   withErrorHandling,
   withSyncErrorHandling,
 } from "./error-handler.ts";
+
+export { type Logger, logger } from "./logger.ts";

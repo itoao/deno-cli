@@ -2,6 +2,8 @@
  * 統一されたエラーハンドリングパターンを提供するモジュール
  */
 
+import { logger } from "./logger.ts";
+
 export interface ErrorHandlerOptions {
   /** エラーメッセージのプレフィックス */
   prefix?: string;
@@ -51,7 +53,7 @@ export function handleError(
   }
 
   if (logError) {
-    console.error(`${prefix}: ${message}`);
+    logger.error(`${prefix}: ${message}`);
   }
 
   if (shouldExit) {
@@ -109,7 +111,7 @@ export function handleGitError(
  * 警告メッセージを表示する関数
  */
 export function warn(message: string, prefix = "⚠️"): void {
-  console.warn(`${prefix} ${message}`);
+  logger.warn(`${prefix} ${message}`);
 }
 
 /**

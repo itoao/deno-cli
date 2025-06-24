@@ -1,5 +1,6 @@
-import type { GitFileChange, SessionMetadata } from "../../shared/types.ts";
 import { generateCommitTitle as generateTitleWithLLM } from "../../shared/commit-title-generator.ts";
+import { logger } from "../../shared/index.ts";
+import type { GitFileChange, SessionMetadata } from "../../shared/types.ts";
 
 // Simplified version of gclm's title generation
 // Integrated with LLM for smarter titles with fallback
@@ -11,8 +12,7 @@ const FILE_TYPE_PATTERNS = {
   test: (path: string) =>
     path.includes("test") || path.includes("spec") ||
     path.endsWith(".test.ts") || path.endsWith(".spec.ts"),
-  docs: (path: string) =>
-    path.endsWith(".md") || path.endsWith(".rst") || path.includes("docs/"),
+  docs: (path: string) => path.endsWith(".md") || path.endsWith(".rst") || path.includes("docs/"),
   build: (path: string) =>
     path.includes("build") || path.includes("dist") || path.endsWith(".lock"),
 } as const;
@@ -26,9 +26,9 @@ export async function generateCommitTitle(
     const llmTitle = await generateTitleWithLLM(files);
     return llmTitle;
   } catch (error) {
-    console.warn(
-      "⚠️ LLM title generation failed, using pattern-based fallback:",
-      error instanceof Error ? error.message : String(error),
+    logger.warn(
+      "⚠️ LLM title generation failed, using pattern-based fallback: " +
+        (error instanceof Error ? error.message : String(error)),
     );
 
     // Fallback to pattern-based generation
@@ -107,7 +107,13 @@ function summarizePrompt(prompt: string): string {
   return summary.length === 40 ? summary + "..." : summary;
 }
 
-function categorizeFiles(files: GitFileChange[]) {
+function categorizeFiles(files: GitFileChange[]): {
+  config: GitFileChange[];
+  test: GitFileChange[];
+  docs: GitFileChange[];
+  build: GitFileChange[];
+  other: GitFileChange[];
+} {
   const categories = {
     config: [] as GitFileChange[],
     test: [] as GitFileChange[],

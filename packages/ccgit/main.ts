@@ -1,8 +1,9 @@
 #!/usr/bin/env -S deno run --allow-all
 import { $ } from "jsr:@david/dax@0.40.0";
-import * as git from "./git.ts";
-import type { ClaudeOutput } from "../../shared/types.ts";
 import { handleError } from "../../shared/error-handler.ts";
+import { logger } from "../../shared/index.ts";
+import type { ClaudeOutput } from "../../shared/types.ts";
+import * as git from "./git.ts";
 
 // Constants
 const DEBOUNCE_DELAY = 500;
@@ -65,7 +66,7 @@ async function commitFileChanges(metadata: {
 
   const title = `Claude Chat Session: ${metadata.sessionId}`;
   await git.commitChanges(title, metadata);
-  console.log(`\n🎯 Auto-committed by fswatch`);
+  logger.log(`\n🎯 Auto-committed by fswatch`);
 }
 
 function createFileWatcher(): FileWatcherOptions {
@@ -81,7 +82,7 @@ function createFileWatcher(): FileWatcherOptions {
 async function watchFileChanges(options: FileWatcherOptions): Promise<void> {
   const { watcher } = options;
 
-  async function commitIfChanged() {
+  async function commitIfChanged(): Promise<void> {
     if (options.commitInProgress) return;
     options.commitInProgress = true;
 
@@ -162,6 +163,7 @@ async function readStream(
   let result = "";
 
   while (true) {
+    // deno-lint-ignore no-await-in-loop
     const { done, value } = await reader.read();
     if (done) break;
 
@@ -232,17 +234,17 @@ async function handleClaudeSession(args: string[]): Promise<void> {
   const isInteractiveMode = !hasPromptArgument(args);
 
   try {
-    console.log("🚀 Starting Claude session with auto-commit...");
+    logger.log("🚀 Starting Claude session with auto-commit...");
     const output = await runClaudeWithMonitoring(args);
     Deno.exit(output.exitCode);
   } catch (error) {
     if (isInteractiveMode) {
-      console.error(`❌ Claude CLI execution failed: ${error}`);
-      console.log(
+      logger.error(`❌ Claude CLI execution failed: ${error}`);
+      logger.log(
         `ℹ️  Try running 'claude doctor' to diagnose Claude CLI issues`,
       );
-      console.log(`ℹ️  Or run 'claude' directly to test Claude CLI`);
-      console.log(`ℹ️  Args passed to claude: ${JSON.stringify(args)}`);
+      logger.log(`ℹ️  Or run 'claude' directly to test Claude CLI`);
+      logger.log(`ℹ️  Args passed to claude: ${JSON.stringify(args)}`);
     } else {
       handleError(error, {
         prefix: "Error running Claude session",
@@ -254,7 +256,7 @@ async function handleClaudeSession(args: string[]): Promise<void> {
 }
 
 async function showHelp(): Promise<void> {
-  console.log(`ccgit - Claude Chat Git Integration
+  logger.log(`ccgit - Claude Chat Git Integration
 
 Usage:
   ccgit [claude options]        Run Claude with automatic git tracking
@@ -314,37 +316,37 @@ Claude CLI Options (all passed through transparently):
             "$1  $2$3      $4",
           );
 
-          console.log(`  ${modifiedLine.trim()}`);
+          logger.log(`  ${modifiedLine.trim()}`);
         }
       }
     }
 
     if (!optionsFound) {
-      console.log("  (Run 'claude --help' for complete Claude CLI options)");
+      logger.log("  (Run 'claude --help' for complete Claude CLI options)");
     }
   } catch (_error) {
-    console.log("  (Run 'claude --help' for complete Claude CLI options)");
+    logger.log("  (Run 'claude --help' for complete Claude CLI options)");
   }
 }
 
 function showInteractiveInfo(args: string[]): void {
-  console.log(`🚀 Starting Claude interactive session with auto-commit...`);
-  console.log(`🎯 Interactive mode with auto-commit enabled`);
+  logger.log(`🚀 Starting Claude interactive session with auto-commit...`);
+  logger.log(`🎯 Interactive mode with auto-commit enabled`);
 
   // Show specific options being passed
   if (args.includes("--dangerously-skip-permissions")) {
-    console.log(`⚠️  --dangerously-skip-permissions enabled for this session`);
+    logger.log(`⚠️  --dangerously-skip-permissions enabled for this session`);
   }
 
   if (args.includes("-c") || args.includes("--continue")) {
-    console.log(`↩️  Continuing last Claude conversation`);
+    logger.log(`↩️  Continuing last Claude conversation`);
   }
 
   if (args.includes("-r") || args.includes("--resume")) {
     const resumeIndex = Math.max(args.indexOf("-r"), args.indexOf("--resume"));
     const sessionId = args[resumeIndex + 1];
     if (sessionId) {
-      console.log(`📂 Resuming Claude session: ${sessionId}`);
+      logger.log(`📂 Resuming Claude session: ${sessionId}`);
     }
   }
 
@@ -352,16 +354,16 @@ function showInteractiveInfo(args: string[]): void {
     const modelIndex = args.indexOf("--model");
     const model = args[modelIndex + 1];
     if (model) {
-      console.log(`🤖 Using model: ${model}`);
+      logger.log(`🤖 Using model: ${model}`);
     }
   }
 
   if (args.includes("/orchestrator")) {
-    console.log(`🎼 Orchestrator mode enabled`);
+    logger.log(`🎼 Orchestrator mode enabled`);
   }
 }
 
-async function main() {
+async function main(): Promise<void> {
   const args = Deno.args;
 
   // Handle help
