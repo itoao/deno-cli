@@ -61,7 +61,8 @@ async function runClaudeCode(command: string): Promise<void> {
       Deno.exit(code);
     }
   } catch (error) {
-    console.error(`Claude Code の実行中にエラーが発生しました: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`Claude Code の実行中にエラーが発生しました: ${errorMessage}`);
     Deno.exit(1);
   }
 }
