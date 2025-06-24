@@ -1,4 +1,5 @@
 {
+  "nodeModulesDir": "auto",
   "workspace": [
     "./packages/ccgit",
     "./packages/gclm",
