@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(deno check:*)",
-      "Bash(./ccgit:*)"
+      "Bash(./ccgit:*)",
+      "Bash(deno run:*)"
     ],
     "deny": []
   }
