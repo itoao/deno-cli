@@ -1,4 +1,4 @@
-name: Deno CI
+name: CI
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  ci:
     runs-on: ubuntu-latest
 
     steps:
@@ -44,18 +44,3 @@ jobs:
           else
             echo "No deno.json found, skipping tests"
           fi
-
-      - name: Generate coverage
-        if: success()
-        run: |
-          if [ -f "deno.json" ] || [ -f "deno.jsonc" ]; then
-            deno test --allow-all --coverage=cov_profile
-            deno coverage cov_profile --lcov --output=cov.lcov
-          fi
-
-      - name: Upload coverage to Codecov
-        if: success()
-        uses: codecov/codecov-action@v3
-        with:
-          file: ./cov.lcov
-          fail_ci_if_error: false
