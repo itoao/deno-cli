@@ -1,7 +1,8 @@
 {
-  "name": "@deno-cli/gclm",
-  "version": "1.0.0",
+  "name": "@uchay/gclm",
+  "version": "0.0.3",
   "exports": "./main.ts",
+  "license": "MIT",
   "tasks": {
     "run": "deno run --allow-net --allow-env --allow-read --allow-run main.ts",
     "install": "deno install -g --allow-net --allow-env --allow-read --allow-run --force -n gclm ./main.ts",

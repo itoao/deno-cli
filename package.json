@@ -1,15 +1,29 @@
 {
-  "name": "deno-cli",
+  "name": "@deno-cli/gclm",
   "version": "1.0.0",
-  "description": "",
+  "description": "AI-powered Git commit tool that intelligently groups staged files and generates commit messages",
   "main": "index.js",
+  "bin": {
+    "gclm": "./bin/gclm.js"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "keywords": ["git", "commit", "ai", "llm", "automation", "cli"],
   "author": "",
   "license": "ISC",
-  "dependencies": {
-    "@anthropic-ai/claude-code": "^1.0.33"
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "files": [
+    "bin/",
+    "packages/gclm/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/gclm.git"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

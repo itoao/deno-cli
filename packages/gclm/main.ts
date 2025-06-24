@@ -1,5 +1,3 @@
-import { parseArgs } from "node:util";
-import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code";
 import {
   categorizeFiles,
   createCommit,
@@ -9,7 +7,10 @@ import {
   handleError,
   logger,
   warn,
-} from "../../shared/index.ts";
+} from "jsr:@deno-cli/shared@0.0.1";
+import { parseArgs } from "node:util";
+import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code@1.0.33";
+import ora from "npm:ora@8.2.0";
 
 interface Config {
   maxDiffPreviewLines: number;
@@ -27,8 +28,29 @@ const CONFIG: Config = {
   },
 };
 
+class LoadingSpinner {
+  // deno-lint-ignore no-explicit-any
+  private spinner: any;
+
+  constructor(message: string) {
+    this.spinner = ora(message);
+  }
+
+  start(): void {
+    this.spinner.start();
+  }
+
+  stop(finalMessage?: string): void {
+    if (finalMessage) {
+      this.spinner.succeed(finalMessage);
+    } else {
+      this.spinner.stop();
+    }
+  }
+}
+
 function createFilePreview(file: GitFileChange): string {
-  const diffLines = file.diff ? file.diff.split("\n") : [];
+  const diffLines = file.diff ? file.diff.replace(/\0/g, "").split("\n") : [];
   const preview = diffLines.slice(0, CONFIG.maxDiffPreviewLines).join("\n");
   return `- ${file.path} (${file.status})\n  Changes: ${preview}`;
 }
@@ -42,6 +64,7 @@ async function groupFilesByLLM(
 
   const fileList = files.map(createFilePreview).join("\n\n");
 
+  // Clean prompt to remove null bytes and ensure clean encoding
   const prompt =
     `Analyze these staged git files and group them into logical commits. Each group should be a cohesive set of changes.
 
@@ -63,7 +86,10 @@ Return a JSON array where each element is an array of file paths to commit toget
   ["README.md"]
 ]
 
-Return ONLY the JSON array, no other text.`;
+Return ONLY the JSON array, no other text.`.replace(/\0/g, ""); // Remove null bytes
+
+  const spinner = new LoadingSpinner("🧠 AI is analyzing files for logical grouping...");
+  spinner.start();
 
   try {
     const messages: SDKMessage[] = [];
@@ -76,7 +102,9 @@ Return ONLY the JSON array, no other text.`;
         options: CONFIG.queryOptions,
       })
     ) {
-      messages.push(message);
+      if (message) { // Add null check
+        messages.push(message);
+      }
     }
 
     const groupPaths = extractGroupPathsFromMessages(messages);
@@ -84,8 +112,10 @@ Return ONLY the JSON array, no other text.`;
       throw new Error("No valid response found in messages");
     }
 
+    spinner.stop("✅ AI analysis completed");
     return convertPathsToFileGroups(groupPaths, files);
   } catch (error) {
+    spinner.stop();
     warn(
       `LLM grouping failed, using simple fallback: ${
         error instanceof Error ? error.message : String(error)
@@ -120,8 +150,18 @@ Return ONLY the JSON array, no other text.`;
 function extractGroupPathsFromMessages(
   messages: SDKMessage[],
 ): string[][] | null {
+  // Check if messages is null or empty
+  if (!messages || messages.length === 0) {
+    return null;
+  }
+
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
+
+    // Null check for message
+    if (!message) {
+      continue;
+    }
 
     try {
       if (message.type === "result" && "result" in message && message.result) {
@@ -139,7 +179,7 @@ function extractGroupPathsFromMessages(
         message.message?.content
       ) {
         for (const content of message.message.content) {
-          if (content.type === "text" && content.text) {
+          if (content?.type === "text" && content.text) {
             const groupsText = String(content.text).trim();
             // Try to extract JSON from the text if it contains extra content
             const jsonMatch = groupsText.match(/\[[\s\S]*\]/);
@@ -210,12 +250,21 @@ async function processCommitGroup(
   logger.log(`\n📝 Commit ${index + 1}/${total}:`);
   logger.log(`   Files: ${group.map((f) => f.path).join(", ")}`);
 
-  const title = await generateCommitTitle(group, {
-    maxCommitTitleLength: CONFIG.maxCommitTitleLength,
-    maxDiffPreviewLines: CONFIG.maxDiffPreviewLines,
-    queryOptions: CONFIG.queryOptions,
-  });
-  await createCommit(group, title);
+  const spinner = new LoadingSpinner(`📝 Generating commit title for ${group.length} files...`);
+  spinner.start();
+
+  try {
+    const title = await generateCommitTitle(group, {
+      maxCommitTitleLength: CONFIG.maxCommitTitleLength,
+      maxDiffPreviewLines: CONFIG.maxDiffPreviewLines,
+      queryOptions: CONFIG.queryOptions,
+    });
+    spinner.stop(`✅ Title generated: "${title}"`);
+    await createCommit(group, title);
+  } catch (error) {
+    spinner.stop();
+    throw error;
+  }
 }
 
 async function main(): Promise<void> {
@@ -259,10 +308,11 @@ Make sure to stage your files with 'git add' before running gclm.
   }
 
   try {
-    if (parsed.values.verbose) {
-      logger.log("🔍 Analyzing staged files...");
-    }
+    const spinner = new LoadingSpinner("🔍 Analyzing staged files...");
+    spinner.start();
+
     const stagedFiles = await getGitStagedFiles();
+    spinner.stop();
 
     if (stagedFiles.length === 0) {
       logger.log("❌ No staged files found. Use 'git add' first.");
@@ -277,11 +327,15 @@ Make sure to stage your files with 'git add' before running gclm.
       if (parsed.values.verbose) {
         logger.log("📝 Single file found, creating single commit...");
       }
+      const titleSpinner = new LoadingSpinner("📝 Generating commit title...");
+      titleSpinner.start();
+
       const title = await generateCommitTitle(stagedFiles, {
         maxCommitTitleLength: CONFIG.maxCommitTitleLength,
         maxDiffPreviewLines: CONFIG.maxDiffPreviewLines,
         queryOptions: CONFIG.queryOptions,
       });
+      titleSpinner.stop(`✅ Title generated: "${title}"`);
       await createCommit(stagedFiles, title);
       logger.log("\n🎉 Commit created!");
       return;

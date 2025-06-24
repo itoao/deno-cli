@@ -1,4 +1,4 @@
-import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code";
+import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code@1.0.33";
 import type { GitFileChange } from "./types.ts";
 import { warn } from "./error-handler.ts";
 
@@ -83,7 +83,7 @@ function createCommitPrompt(
   const fileList = files.map((f) => `${f.path} (${f.status})`).join("\n");
   const diffSample = files
     .filter((f) => f.diff)
-    .map((f) => (f.diff ?? "").split("\n").slice(0, config.maxDiffPreviewLines).join("\n"))
+    .map((f) => (f.diff ?? "").replace(/\0/g, '').split("\n").slice(0, config.maxDiffPreviewLines).join("\n"))
     .join("\n---\n");
 
   return `Generate a concise commit title for these changes:
@@ -104,18 +104,62 @@ feat: add user authentication
 fix: resolve memory leak in parser
 chore: update dependencies
 
-Return only the title:`;
+Return only the title:`.replace(/\0/g, '');
+}
+
+function isValidCommitTitle(text: string): boolean {
+  if (!text || text.length === 0) return false;
+  
+  // Check if it starts with conventional commit prefix
+  const conventionalPrefixes = [
+    'feat:', 'fix:', 'docs:', 'refactor:', 'test:', 'config:', 'chore:', 
+    'style:', 'perf:', 'build:', 'ci:', 'revert:', 'wip:'
+  ];
+  
+  const hasValidPrefix = conventionalPrefixes.some(prefix => 
+    text.toLowerCase().startsWith(prefix.toLowerCase())
+  );
+  
+  // Check if it looks like explanatory text (contains common conversational phrases)
+  const conversationalPhrases = [
+    "i'll", "looking at", "based on", "here", "this", "the code", 
+    "let me", "i can see", "it appears", "from the diff", "appears to",
+    "wait for your input", "what task would you", "help you with"
+  ];
+  
+  const hasConversationalPhrase = conversationalPhrases.some(phrase =>
+    text.toLowerCase().includes(phrase.toLowerCase())
+  );
+  
+  // Valid if has prefix and doesn't contain conversational phrases
+  return hasValidPrefix && !hasConversationalPhrase;
 }
 
 function extractTitleFromMessages(messages: SDKMessage[]): string | null {
+  // Check if messages is null or empty
+  if (!messages || messages.length === 0) {
+    return null;
+  }
+
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
+    
+    // Null check for message
+    if (!message) {
+      continue;
+    }
 
     if (message.type === "result" && "result" in message && message.result) {
       const title = String(message.result).trim();
-      // Extract only the commit title, remove any extra explanatory text
       const lines = title.split("\n");
-      return lines[0].trim();
+      
+      // Try each line to find a valid commit title
+      for (const line of lines) {
+        const cleanLine = line.trim();
+        if (isValidCommitTitle(cleanLine)) {
+          return cleanLine;
+        }
+      }
     }
 
     if (
@@ -123,11 +167,17 @@ function extractTitleFromMessages(messages: SDKMessage[]): string | null {
       message.message?.content
     ) {
       for (const content of message.message.content) {
-        if (content.type === "text" && content.text) {
+        if (content?.type === "text" && content.text) {
           const title = String(content.text).trim();
-          // Extract only the commit title, remove any extra explanatory text
           const lines = title.split("\n");
-          return lines[0].trim();
+          
+          // Try each line to find a valid commit title
+          for (const line of lines) {
+            const cleanLine = line.trim();
+            if (isValidCommitTitle(cleanLine)) {
+              return cleanLine;
+            }
+          }
         }
       }
     }
@@ -154,7 +204,9 @@ export async function generateCommitTitle(
         options: mergedConfig.queryOptions,
       })
     ) {
-      messages.push(message);
+      if (message) { // Add null check
+        messages.push(message);
+      }
     }
 
     const title = extractTitleFromMessages(messages);

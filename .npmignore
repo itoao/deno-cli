@@ -1,0 +1,32 @@
+# Development files
+*.test.ts
+*.test.js
+__tests__/
+test/
+
+# Source control
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Other Deno packages
+packages/ccgit/
+packages/color-terminal/
+packages/node-alias/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Build artifacts
+.deno_dir/
+node_modules/
+
+# Configuration
+deno.json
+!packages/gclm/deno.json
+CLAUDE.md
