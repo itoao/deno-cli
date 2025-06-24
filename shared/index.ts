@@ -4,12 +4,7 @@ export {
   generateFallbackTitle,
 } from "./commit-title-generator.ts";
 
-export type {
-  ClaudeOutput,
-  GitCommitInfo,
-  GitFileChange,
-  SessionMetadata,
-} from "./types.ts";
+export type { ClaudeOutput, GitCommitInfo, GitFileChange, SessionMetadata } from "./types.ts";
 
 export {
   checkoutCommit,
