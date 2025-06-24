@@ -1,8 +1,14 @@
-import { $ } from "jsr:@david/dax@0.40.0";
 import { parseArgs } from "node:util";
 import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code";
-import { generateCommitTitle, categorizeFiles } from "../../shared/commit-title-generator.ts";
-import type { GitFileChange } from "../../shared/types.ts";
+import { 
+  generateCommitTitle, 
+  categorizeFiles, 
+  type GitFileChange,
+  getGitStagedFiles,  
+  hasChangesToCommit,
+  createCommit,
+  executeGitCommand
+} from "../../shared/index.ts";
 
 
 interface Config {
@@ -20,64 +26,6 @@ const CONFIG: Config = {
     maxTurns: 2,
   },
 };
-
-async function getGitRoot(): Promise<string> {
-  try {
-    const result = await $`git rev-parse --show-toplevel`.text();
-    return result.trim();
-  } catch (error) {
-    throw new Error(`Failed to get git root: ${error}`);
-  }
-}
-
-async function executeGitCommand(args: string[]): Promise<string> {
-  try {
-    const gitRoot = await getGitRoot();
-    const result = await $`git ${args}`.cwd(gitRoot).text();
-    return result;
-  } catch (error) {
-    throw new Error(`Git command failed: git ${args.join(' ')} - ${error}`);
-  }
-}
-
-async function getGitStagedFiles(): Promise<GitFileChange[]> {
-  try {
-    const statusOutput = await executeGitCommand(["diff", "--cached", "--name-status"]);
-    const statusLines = statusOutput.split('\n').filter(l => l.trim());
-    
-    if (statusLines.length === 0) {
-      return [];
-    }
-    
-    const filePromises = statusLines.map(async (line) => {
-      const parts = line.split('\t');
-      if (parts.length < 2) return null;
-      
-      const status = parts[0] as GitFileChange['status'];
-      const path = parts[1];
-      
-      try {
-        let diff: string;
-        if (status === 'A') {
-          // For new files, use git show to get the content
-          diff = await executeGitCommand(["show", `--format=`, `:${path}`]);
-        } else {
-          // For modified/deleted files, use git diff
-          diff = await executeGitCommand(["diff", "--cached", path]);
-        }
-        return { path, status, diff } as GitFileChange;
-      } catch (error) {
-        console.warn(`⚠️ Failed to get diff for ${path}:`, error);
-        return { path, status, diff: '' };
-      }
-    });
-    
-    const results = await Promise.all(filePromises);
-    return results.filter((file): file is GitFileChange => file !== null);
-  } catch (error) {
-    throw new Error(`Failed to get staged files: ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
 
 function createFilePreview(file: GitFileChange): string {
   const diffLines = file.diff ? file.diff.split('\n') : [];
@@ -236,36 +184,6 @@ function fallbackGrouping(files: GitFileChange[]): GitFileChange[][] {
   }
   
   return groups.length > 0 ? groups : [files];
-}
-
-
-async function hasChangesToCommit(): Promise<boolean> {
-  try {
-    await executeGitCommand(["diff", "--cached", "--quiet"]);
-    return false;
-  } catch {
-    return true;
-  }
-}
-
-async function createCommit(files: GitFileChange[], title: string): Promise<void> {
-  const filePaths = files.map(f => f.path);
-  
-  try {
-    await executeGitCommand(["reset"]);
-    await executeGitCommand(["add", ...filePaths]);
-    
-    const hasChanges = await hasChangesToCommit();
-    if (!hasChanges) {
-      console.log(`⚠️ No changes to commit for: ${filePaths.join(', ')}`);
-      return;
-    }
-    
-    await executeGitCommand(["commit", "-m", title]);
-    console.log(`✅ ${title}`);
-  } catch (error) {
-    throw new Error(`Failed to create commit: ${error instanceof Error ? error.message : String(error)}`);
-  }
 }
 
 async function processCommitGroup(group: GitFileChange[], index: number, total: number): Promise<void> {
