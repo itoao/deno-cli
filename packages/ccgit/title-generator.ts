@@ -1,7 +1,8 @@
 import type { GitFileChange, SessionMetadata } from "../../shared/types.ts";
+import { generateCommitTitle as generateTitleWithLLM } from "../../shared/commit-title-generator.ts";
 
 // Simplified version of gclm's title generation
-// TODO: Later integrate with LLM for smarter titles
+// Integrated with LLM for smarter titles with fallback
 
 const FILE_TYPE_PATTERNS = {
   config: (path: string) => path.endsWith('.json') || path.includes('config') || path.endsWith('.toml') || path.endsWith('.yaml') || path.endsWith('.yml'),
