@@ -1,5 +1,5 @@
 import { $ } from "jsr:@david/dax@0.40.0";
-import type { GitFileChange, SessionMetadata } from "./types.ts";
+import type { GitFileChange, SessionMetadata } from "../../shared/types.ts";
 
 export async function getGitRoot(): Promise<string> {
   try {
