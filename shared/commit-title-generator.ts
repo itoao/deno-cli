@@ -1,5 +1,6 @@
 import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code";
 import type { GitFileChange } from "./types.ts";
+import { warn } from "./error-handler.ts";
 
 interface CommitTitleConfig {
   maxCommitTitleLength: number;
@@ -146,7 +147,7 @@ export async function generateCommitTitle(
       ? title.substring(0, mergedConfig.maxCommitTitleLength - 3) + '...'
       : title;
   } catch (error) {
-    console.warn("⚠️ Failed to generate title, using fallback:", error instanceof Error ? error.message : String(error));
+    warn(`Failed to generate title, using fallback: ${error instanceof Error ? error.message : String(error)}`);
     return generateFallbackTitle(files);
   }
 }
