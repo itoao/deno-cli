@@ -30,10 +30,9 @@ const CONFIG: Config = {
 
 class LoadingSpinner {
   private intervalId: number | null = null;
-  private frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-  private frameIndex = 0;
   private message: string;
   private isRunning = false;
+  private dots = '';
 
   constructor(message: string) {
     this.message = message;
@@ -43,15 +42,17 @@ class LoadingSpinner {
     if (this.intervalId !== null || this.isRunning) return;
     
     this.isRunning = true;
-    logger.log(`${this.frames[0]} ${this.message}`);
+    logger.log(`${this.message}...`);
     
     this.intervalId = setInterval(() => {
       if (!this.isRunning) return;
-      this.frameIndex = (this.frameIndex + 1) % this.frames.length;
-      // Use cursor up and clear line for better terminal compatibility
-      process.stdout.write('\x1b[1A\x1b[2K');
-      logger.log(`${this.frames[this.frameIndex]} ${this.message}`);
-    }, 100);
+      this.dots += '.';
+      if (this.dots.length > 3) {
+        this.dots = '';
+      }
+      // Simply print progress dots without complex terminal control
+      process.stdout.write('.');
+    }, 500);
   }
 
   stop(finalMessage?: string): void {
@@ -61,8 +62,8 @@ class LoadingSpinner {
     }
     this.isRunning = false;
     
-    // Clear the spinner line
-    process.stdout.write('\x1b[1A\x1b[2K');
+    // Print a newline to separate from dots
+    process.stdout.write('\n');
     
     if (finalMessage) {
       logger.log(finalMessage);
