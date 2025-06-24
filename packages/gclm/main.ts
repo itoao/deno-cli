@@ -7,7 +7,10 @@ import {
   getGitStagedFiles,  
   hasChangesToCommit,
   createCommit,
-  executeGitCommand
+  executeGitCommand,
+  handleError,
+  warn,
+  withErrorHandling
 } from "../../shared/index.ts";
 
 
@@ -81,7 +84,7 @@ Return ONLY the JSON array, no other text.`;
     
     return convertPathsToFileGroups(groupPaths, files);
   } catch (error) {
-    console.warn("⚠️ LLM grouping failed, using simple fallback:", error instanceof Error ? error.message : String(error));
+    warn(`LLM grouping failed, using simple fallback: ${error instanceof Error ? error.message : String(error)}`);
     return fallbackGrouping(files);
   }
 }
@@ -282,8 +285,7 @@ Make sure to stage your files with 'git add' before running gclm.
     console.log("\n🎉 All commits created!");
     
   } catch (error) {
-    console.error("❌ Error:", error instanceof Error ? error.message : String(error));
-    Deno.exit(1);
+    handleError(error, { prefix: "❌ Error", exitCode: 1 });
   }
 }
 
