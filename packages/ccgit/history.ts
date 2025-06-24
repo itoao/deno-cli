@@ -1,5 +1,6 @@
 import { $ } from "jsr:@david/dax@0.40.0";
 import * as git from "./git.ts";
+import { handleError } from "../../shared/error-handler.ts";
 
 export async function checkoutSession(sessionIdOrHash: string): Promise<void> {
   // First try as a commit hash
@@ -13,8 +14,11 @@ export async function checkoutSession(sessionIdOrHash: string): Promise<void> {
     const commits = await git.getCommitsBySessionId(sessionIdOrHash);
     
     if (commits.length === 0) {
-      console.error(`❌ No commits found for session ID: ${sessionIdOrHash}`);
-      Deno.exit(1);
+      handleError(`No commits found for session ID: ${sessionIdOrHash}`, {
+        prefix: '❌',
+        exitCode: 1
+      });
+      return;
     }
     
     // Checkout the first (most recent) commit
@@ -57,6 +61,10 @@ export async function listSessions(): Promise<void> {
       console.log(`${shortHash} ${sessionId.padEnd(20)} ${formattedDate}`);
     }
   } catch (error) {
-    console.error(`Failed to list sessions: ${error}`);
+    handleError(error, {
+      prefix: 'Failed to list sessions',
+      logError: true,
+      exitCode: 0 // Don't exit for list command failures
+    });
   }
 }
