@@ -1,103 +1,210 @@
-# Git Commit With LLM CLI
+# GCLM (Git Commit with LLM)
 
-ステージングされたファイルを適切なコミット粒度に自動分割し、Claude
-AIが生成したタイトルでコミットを作成するCLIツールです。
+An intelligent CLI tool that analyzes staged git files and automatically creates logical commits with AI-generated commit messages using Claude AI.
 
-## 機能
+## Features
 
-- **自動ファイル検出**: ステージングされたファイルを自動で検出
-- **コミットの分割**: Claude Code SDKを使用して適切な粒度でコミットを分割
-- **AI生成タイトル**: Claude Code SDKを使用して適切なコミットタイトルを自動生成
-- **Conventional Commits**: `feat:`, `fix:`,
-  `docs:`などの標準的なフォーマットに対応
+- **🧠 AI-Powered Grouping**: Uses Claude AI to intelligently group staged files into logical commits
+- **📝 Smart Commit Messages**: Generates meaningful commit titles following Conventional Commits format
+- **⚡ Automatic Detection**: Automatically detects and analyzes staged git files
+- **🔄 Fallback Strategy**: Falls back to rule-based grouping if AI analysis fails
+- **📊 Verbose Mode**: Optional detailed logging for debugging and transparency
 
-## 必要な環境
+## Prerequisites
 
-- Deno
-- Git
-- インターネット接続 (Claude API使用のため)
+- [Deno](https://deno.land/) runtime
+- Git repository
+- Internet connection (for Claude API)
+- Anthropic API key (via `ANTHROPIC_API_KEY` environment variable)
 
-## 使用方法
+## Installation
 
-### 1. ファイルをステージング
+### From JSR (Recommended)
 
 ```bash
-# 特定のファイルをステージング
-git add src/index.ts
-
-# または全てのファイルをステージング
-git add .
+# Install globally
+deno install -g --allow-net --allow-env --allow-read --allow-run -n gclm jsr:@uchay/gclm
 ```
 
-### 2. CLIを実行
+### From Source
 
 ```bash
-deno task run
+# Clone and install locally
+git clone <repository>
+cd gclm
+deno task install
 ```
 
-### 実行例
+## Usage
+
+### Basic Usage
+
+1. **Stage your files**:
+   ```bash
+   git add .
+   # or stage specific files
+   git add src/feature.ts tests/feature.test.ts
+   ```
+
+2. **Run GCLM**:
+   ```bash
+   gclm
+   ```
+
+### Command Line Options
 
 ```bash
-$ git add src/index.ts config/database.json tests/user.test.ts
-$ deno task run
+gclm [options]
+
+Options:
+  -h, --help      Show help message
+  -v, --version   Show version
+  --verbose       Enable detailed output
+```
+
+### Example Session
+
+```bash
+$ git add src/auth.ts src/database.ts tests/auth.test.ts config/database.json
+$ gclm --verbose
 
 🔍 Analyzing staged files...
-📁 Found 3 staged files
-📦 Split into 3 commit groups
+📁 Found 4 staged files
+🧠 AI is analyzing files for logical grouping...
+✅ AI analysis completed
+📦 AI suggested 3 logical commits
 
-🤔 Generating commit title for group 1...
-📝 Title: config: update database connection settings
-✅ Committed: config: update database connection settings
+📝 Commit 1/3:
+   Files: config/database.json
+📝 Generating commit title for 1 files...
+✅ Title generated: "config: update database connection settings"
 
-🤔 Generating commit title for group 2...
-📝 Title: test: add user authentication tests
-✅ Committed: test: add user authentication tests
+📝 Commit 2/3:
+   Files: src/auth.ts, tests/auth.test.ts
+📝 Generating commit title for 2 files...
+✅ Title generated: "feat: implement user authentication system"
 
-🤔 Generating commit title for group 3...
-📝 Title: feat: implement user profile management
-✅ Committed: feat: implement user profile management
+📝 Commit 3/3:
+   Files: src/database.ts
+📝 Generating commit title for 1 files...
+✅ Title generated: "feat: add database connection utilities"
 
-🎉 All commits created successfully!
+🎉 All commits created!
 ```
 
-## コミット分割ロジック
+## How It Works
 
-ファイルは以下の優先順位でグループ化されます：
+### 1. File Analysis
+GCLM analyzes staged files using Claude AI to understand:
+- File relationships and dependencies
+- Logical groupings of changes
+- Appropriate commit boundaries
 
-1. **設定ファイル**: `config`, `.json`, `.yaml`, `.yml`, `.toml`
-2. **テストファイル**: `test`, `spec`, `.test.ts`, `.spec.ts`
-3. **ドキュメント**: `.md`, `doc`, `readme`
-4. **ソースコード**: `.ts`, `.js`, `.tsx`, `.jsx`
-5. **その他**: 上記に該当しないファイル
+### 2. Intelligent Grouping
+The AI considers:
+- **Related functionality** - Groups files that implement the same feature
+- **Configuration separation** - Keeps config changes separate from code
+- **Test relationships** - Groups tests with related code when appropriate
+- **Documentation** - Handles docs separately unless directly related
+- **Bug fixes vs features** - Separates different types of changes
 
-## 注意事項
+### 3. Fallback Strategy
+If AI analysis fails, GCLM uses rule-based categorization:
+1. **Configuration files**: `.json`, `.yaml`, `.yml`, `.toml`
+2. **Documentation**: `.md`, `README`, `doc` files
+3. **Test files**: `.test.ts`, `.spec.ts`, test directories
+4. **Build files**: Build configs and scripts
+5. **Source code**: All other code files
 
-- ステージングされたファイルがない場合は実行されません
-- Claude APIの利用にはインターネット接続が必要です
-- 生成されるコミットタイトルは最大50文字に制限されています
-- エラーが発生した場合、プロセスは中断されます
+### 4. Commit Message Generation
+Each group gets an AI-generated commit message following:
+- **Conventional Commits** format (`feat:`, `fix:`, `docs:`, etc.)
+- **50 character limit** for commit titles
+- **Descriptive and meaningful** messages based on actual changes
 
-## エラー対処
+## Configuration
 
-### "No staged files found"
+GCLM uses the `@deno-cli/shared` library for core git operations and includes built-in configuration:
 
+```typescript
+const CONFIG = {
+  maxDiffPreviewLines: 5,      // Lines of diff shown to AI
+  maxCommitTitleLength: 50,    // Maximum commit title length
+  queryOptions: {
+    maxTurns: 2                // AI conversation turns
+  }
+};
+```
+
+## Error Handling
+
+### Common Issues
+
+**"No staged files found"**
 ```bash
-# ファイルをステージングしてから実行してください
-git add <ファイル名>
+# Stage files first
+git add <files>
+gclm
+```
+
+**"Failed to get git diff --cached"**
+- Ensure you're in a git repository
+- Verify git is installed and accessible
+
+**API Connection Issues**
+- Check internet connection
+- Verify `ANTHROPIC_API_KEY` environment variable is set
+- Ensure API key has sufficient credits
+
+## Development
+
+### Setup
+```bash
+# Clone repository
+git clone <repository>
+cd gclm
+
+# Run tests
+deno task test
+
+# Run with development permissions
 deno task run
 ```
 
-### "Failed to get git diff --cached"
-
-- Git リポジトリ内で実行されているか確認してください
-- Git がインストールされているか確認してください
-
-## 開発
-
-```bash
-# 依存関係の更新
-deno cache --reload src/index.ts
-
-# デバッグ実行
-deno run --allow-net --allow-env --allow-read --allow-run src/index.ts
+### Project Structure
 ```
+gclm/
+├── main.ts           # Main CLI application
+├── main.test.ts      # Unit tests
+├── deno.json         # Deno configuration
+└── README.md         # This file
+```
+
+### Dependencies
+- `jsr:@deno-cli/shared` - Shared utilities for git operations
+- `npm:@anthropic-ai/claude-code` - Claude AI SDK
+- `npm:ora` - Terminal spinners
+- `node:util` - Argument parsing
+
+## License
+
+MIT License - see LICENSE file for details.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## Changelog
+
+### v0.0.3
+- Current version with AI-powered file grouping
+- Improved error handling and fallback strategies
+- Added verbose mode for debugging
+
+---
+
+**Note**: This tool requires an Anthropic API key and makes API calls to Claude AI. Usage may incur costs based on your Anthropic plan.
