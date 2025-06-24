@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import process from "node:process";
+import ora from "npm:ora";
 import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code";
 import {
   categorizeFiles,
@@ -29,44 +29,22 @@ const CONFIG: Config = {
 };
 
 class LoadingSpinner {
-  private intervalId: number | null = null;
-  private message: string;
-  private isRunning = false;
-  private dots = '';
+  // deno-lint-ignore no-explicit-any
+  private spinner: any;
 
   constructor(message: string) {
-    this.message = message;
+    this.spinner = ora(message);
   }
 
   start(): void {
-    if (this.intervalId !== null || this.isRunning) return;
-    
-    this.isRunning = true;
-    logger.log(`${this.message}...`);
-    
-    this.intervalId = setInterval(() => {
-      if (!this.isRunning) return;
-      this.dots += '.';
-      if (this.dots.length > 3) {
-        this.dots = '';
-      }
-      // Simply print progress dots without complex terminal control
-      process.stdout.write('.');
-    }, 500);
+    this.spinner.start();
   }
 
   stop(finalMessage?: string): void {
-    if (this.intervalId !== null) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
-    }
-    this.isRunning = false;
-    
-    // Print a newline to separate from dots
-    process.stdout.write('\n');
-    
     if (finalMessage) {
-      logger.log(finalMessage);
+      this.spinner.succeed(finalMessage);
+    } else {
+      this.spinner.stop();
     }
   }
 }
