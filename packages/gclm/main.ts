@@ -27,6 +27,39 @@ const CONFIG: Config = {
   },
 };
 
+class LoadingSpinner {
+  private intervalId: number | null = null;
+  private frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  private frameIndex = 0;
+  private message: string;
+
+  constructor(message: string) {
+    this.message = message;
+  }
+
+  start() {
+    if (this.intervalId !== null) return;
+    
+    process.stdout.write('\x1b[?25l'); // Hide cursor
+    this.intervalId = setInterval(() => {
+      process.stdout.write(`\r${this.frames[this.frameIndex]} ${this.message}`);
+      this.frameIndex = (this.frameIndex + 1) % this.frames.length;
+    }, 100);
+  }
+
+  stop(finalMessage?: string) {
+    if (this.intervalId !== null) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    process.stdout.write('\r\x1b[K'); // Clear line
+    process.stdout.write('\x1b[?25h'); // Show cursor
+    if (finalMessage) {
+      console.log(finalMessage);
+    }
+  }
+}
+
 function createFilePreview(file: GitFileChange): string {
   const diffLines = file.diff ? file.diff.replace(/\0/g, '').split("\n") : [];
   const preview = diffLines.slice(0, CONFIG.maxDiffPreviewLines).join("\n");
@@ -65,6 +98,9 @@ Return a JSON array where each element is an array of file paths to commit toget
 
 Return ONLY the JSON array, no other text.`.replace(/\0/g, ''); // Remove null bytes
 
+  const spinner = new LoadingSpinner("🧠 AI is analyzing files for logical grouping...");
+  spinner.start();
+
   try {
     const messages: SDKMessage[] = [];
     const abortController = new AbortController();
@@ -86,8 +122,10 @@ Return ONLY the JSON array, no other text.`.replace(/\0/g, ''); // Remove null b
       throw new Error("No valid response found in messages");
     }
 
+    spinner.stop("✅ AI analysis completed");
     return convertPathsToFileGroups(groupPaths, files);
   } catch (error) {
+    spinner.stop();
     warn(
       `LLM grouping failed, using simple fallback: ${
         error instanceof Error ? error.message : String(error)
@@ -222,12 +260,21 @@ async function processCommitGroup(
   logger.log(`\n📝 Commit ${index + 1}/${total}:`);
   logger.log(`   Files: ${group.map((f) => f.path).join(", ")}`);
 
-  const title = await generateCommitTitle(group, {
-    maxCommitTitleLength: CONFIG.maxCommitTitleLength,
-    maxDiffPreviewLines: CONFIG.maxDiffPreviewLines,
-    queryOptions: CONFIG.queryOptions,
-  });
-  await createCommit(group, title);
+  const spinner = new LoadingSpinner(`📝 Generating commit title for ${group.length} files...`);
+  spinner.start();
+
+  try {
+    const title = await generateCommitTitle(group, {
+      maxCommitTitleLength: CONFIG.maxCommitTitleLength,
+      maxDiffPreviewLines: CONFIG.maxDiffPreviewLines,
+      queryOptions: CONFIG.queryOptions,
+    });
+    spinner.stop(`✅ Title generated: "${title}"`);
+    await createCommit(group, title);
+  } catch (error) {
+    spinner.stop();
+    throw error;
+  }
 }
 
 async function main(): Promise<void> {
@@ -271,10 +318,11 @@ Make sure to stage your files with 'git add' before running gclm.
   }
 
   try {
-    if (parsed.values.verbose) {
-      logger.log("🔍 Analyzing staged files...");
-    }
+    const spinner = new LoadingSpinner("🔍 Analyzing staged files...");
+    spinner.start();
+    
     const stagedFiles = await getGitStagedFiles();
+    spinner.stop();
 
     if (stagedFiles.length === 0) {
       logger.log("❌ No staged files found. Use 'git add' first.");
@@ -289,11 +337,15 @@ Make sure to stage your files with 'git add' before running gclm.
       if (parsed.values.verbose) {
         logger.log("📝 Single file found, creating single commit...");
       }
+      const titleSpinner = new LoadingSpinner("📝 Generating commit title...");
+      titleSpinner.start();
+      
       const title = await generateCommitTitle(stagedFiles, {
         maxCommitTitleLength: CONFIG.maxCommitTitleLength,
         maxDiffPreviewLines: CONFIG.maxDiffPreviewLines,
         queryOptions: CONFIG.queryOptions,
       });
+      titleSpinner.stop(`✅ Title generated: "${title}"`);
       await createCommit(stagedFiles, title);
       logger.log("\n🎉 Commit created!");
       return;
