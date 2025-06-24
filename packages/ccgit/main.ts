@@ -329,6 +329,10 @@ function showInteractiveInfo(args: string[]): void {
       console.log(`🤖 Using model: ${model}`);
     }
   }
+  
+  if (args.includes('/orchestrator')) {
+    console.log(`🎼 Orchestrator mode enabled`);
+  }
 }
 
 async function main() {
