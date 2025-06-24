@@ -1,6 +1,3 @@
-import { parseArgs } from "node:util";
-import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code@1.0.33";
-import ora from "npm:ora@8.2.0";
 import {
   categorizeFiles,
   createCommit,
@@ -10,7 +7,10 @@ import {
   handleError,
   logger,
   warn,
-} from "../../shared/index.ts";
+} from "jsr:@deno-cli/shared@0.0.1";
+import { parseArgs } from "node:util";
+import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code@1.0.33";
+import ora from "npm:ora@8.2.0";
 
 interface Config {
   maxDiffPreviewLines: number;
