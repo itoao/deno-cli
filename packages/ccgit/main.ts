@@ -30,7 +30,7 @@ function cleanEnvironment(): Record<string, string> {
 }
 
 function hasPromptArgument(args: string[]): boolean {
-  return args.some(arg => !arg.startsWith('-'));
+  return args.some(arg => !arg.startsWith('-') && !arg.startsWith('/'));
 }
 
 async function commitFileChanges(metadata: {
