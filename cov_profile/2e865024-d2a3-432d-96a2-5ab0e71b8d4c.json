@@ -1,0 +1,86 @@
+{
+  "scriptId": "386",
+  "url": "file:///Users/ao_ito_/IdeaProjects/playground/deno-cli/shared/git-operations.ts",
+  "functions": [
+    {
+      "functionName": "",
+      "ranges": [{ "startOffset": 0, "endOffset": 6136, "count": 1 }],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "getGitRoot",
+      "ranges": [{ "startOffset": 145, "endOffset": 369, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "executeGitCommand",
+      "ranges": [{ "startOffset": 377, "endOffset": 662, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "hasUncommittedChanges",
+      "ranges": [{ "startOffset": 670, "endOffset": 859, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "stashChanges",
+      "ranges": [{ "startOffset": 867, "endOffset": 1189, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "popStash",
+      "ranges": [{ "startOffset": 1197, "endOffset": 1331, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "getStagedFiles",
+      "ranges": [{ "startOffset": 1339, "endOffset": 1786, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "getGitStagedFiles",
+      "ranges": [{ "startOffset": 1794, "endOffset": 3237, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "commitChanges",
+      "ranges": [{ "startOffset": 3245, "endOffset": 4101, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "getCommitsBySessionId",
+      "ranges": [{ "startOffset": 4109, "endOffset": 4350, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "checkoutCommit",
+      "ranges": [{ "startOffset": 4358, "endOffset": 4678, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "createBranch",
+      "ranges": [{ "startOffset": 4686, "endOffset": 4873, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "getFileContent",
+      "ranges": [{ "startOffset": 4881, "endOffset": 5106, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "getFileDiff",
+      "ranges": [{ "startOffset": 5114, "endOffset": 5338, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "hasChangesToCommit",
+      "ranges": [{ "startOffset": 5346, "endOffset": 5531, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "createCommit",
+      "ranges": [{ "startOffset": 5539, "endOffset": 6135, "count": 0 }],
+      "isBlockCoverage": false
+    }
+  ]
+}

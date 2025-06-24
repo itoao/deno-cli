@@ -1,0 +1,26 @@
+{
+  "scriptId": "424",
+  "url": "file:///Users/ao_ito_/IdeaProjects/playground/deno-cli/node_modules/.deno/@anthropic-ai+claude-code@1.0.33/node_modules/@anthropic-ai/claude-code/sdk.mjs",
+  "functions": [
+    {
+      "functionName": "",
+      "ranges": [{ "startOffset": 0, "endOffset": 4699, "count": 1 }],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "query",
+      "ranges": [{ "startOffset": 474, "endOffset": 4420, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "logDebug",
+      "ranges": [{ "startOffset": 4421, "endOffset": 4510, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "isRunningWithBun",
+      "ranges": [{ "startOffset": 4511, "endOffset": 4628, "count": 0 }],
+      "isBlockCoverage": false
+    }
+  ]
+}

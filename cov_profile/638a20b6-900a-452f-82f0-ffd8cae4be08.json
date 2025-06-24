@@ -1,0 +1,54 @@
+{
+  "scriptId": "370",
+  "url": "file:///Users/ao_ito_/IdeaProjects/playground/deno-cli/packages/gclm/main.ts",
+  "functions": [
+    {
+      "functionName": "",
+      "ranges": [
+        { "startOffset": 0, "endOffset": 8006, "count": 1 },
+        { "startOffset": 7992, "endOffset": 8005, "count": 0 }
+      ],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "createFilePreview",
+      "ranges": [{ "startOffset": 344, "endOffset": 584, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "groupFilesByLLM",
+      "ranges": [{ "startOffset": 585, "endOffset": 2049, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "extractGroupPathsFromMessages",
+      "ranges": [{ "startOffset": 2579, "endOffset": 3746, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "convertPathsToFileGroups",
+      "ranges": [{ "startOffset": 3747, "endOffset": 4365, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "fallbackGrouping",
+      "ranges": [{ "startOffset": 4366, "endOffset": 4736, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "processCommitGroup",
+      "ranges": [{ "startOffset": 4737, "endOffset": 5150, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "main",
+      "ranges": [{ "startOffset": 5151, "endOffset": 7480, "count": 0 }],
+      "isBlockCoverage": false
+    },
+    {
+      "functionName": "",
+      "ranges": [{ "startOffset": 7519, "endOffset": 7967, "count": 0 }],
+      "isBlockCoverage": false
+    }
+  ]
+}

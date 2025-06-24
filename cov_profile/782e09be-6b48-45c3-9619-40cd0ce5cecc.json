@@ -1,0 +1,11 @@
+{
+  "scriptId": "338",
+  "url": "file:///Users/ao_ito_/IdeaProjects/playground/deno-cli/shared/index.ts",
+  "functions": [
+    {
+      "functionName": "",
+      "ranges": [{ "startOffset": 0, "endOffset": 565, "count": 1 }],
+      "isBlockCoverage": true
+    }
+  ]
+}
