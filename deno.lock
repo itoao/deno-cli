@@ -3,6 +3,7 @@
   "specifiers": {
     "jsr:@david/dax@0.40.0": "0.40.0",
     "jsr:@david/which@0.3": "0.3.0",
+    "jsr:@deno-cli/shared@^0.0.1": "0.0.1",
     "jsr:@std/assert@0.221": "0.221.0",
     "jsr:@std/assert@1": "1.0.13",
     "jsr:@std/bytes@0.221": "0.221.0",
@@ -35,6 +36,13 @@
     },
     "@david/which@0.3.0": {
       "integrity": "6bdb62c40ac90edcf328e854fa8103a8db21e7c326089cbe3c3a1cf7887d3204"
+    },
+    "@deno-cli/shared@0.0.1": {
+      "integrity": "23d1d5e270ac3b575fc3c663c27b06d0534c083903575549e145d7b6b1271c85",
+      "dependencies": [
+        "jsr:@david/dax",
+        "npm:@anthropic-ai/claude-code@1.0.33"
+      ]
     },
     "@std/assert@0.221.0": {
       "integrity": "a5f1aa6e7909dbea271754fd4ab3f4e687aeff4873b4cef9a320af813adb489a"
@@ -976,6 +984,7 @@
   },
   "workspace": {
     "dependencies": [
+      "jsr:@deno-cli/shared@^0.0.1",
       "jsr:@std/assert@1",
       "npm:@anthropic-ai/claude-code@*",
       "npm:ora@*",
