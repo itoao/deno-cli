@@ -232,18 +232,11 @@ async function handleClaudeSession(args: string[]): Promise<void> {
   }
 }
 
-function showHelp(): void {
+async function showHelp(): Promise<void> {
   console.log(`ccgit - Claude Chat Git Integration
 
 Usage:
   ccgit [claude options]        Run Claude with automatic git tracking
-  
-Claude options (passed through):
-  --dangerously-skip-permissions  Skip all permission checks
-  -c, --continue                  Continue last conversation
-  -r, --resume [sessionId]        Resume a specific session
-  --print                         Non-interactive mode
-  --model <model>                 Specify model to use
   
 Examples:
   ccgit                        Start interactive Claude session
@@ -251,7 +244,53 @@ Examples:
   ccgit -c                     Continue last Claude conversation
   ccgit --resume abc123        Resume a Claude session
   ccgit --dangerously-skip-permissions  Start with permissions bypassed
+
+Claude CLI Options (all passed through transparently):
 `);
+  
+  // Show Claude's help by running claude --help
+  try {
+    const cmd = new Deno.Command("claude", {
+      args: ["--help"],
+      stdout: "piped",
+      stderr: "piped",
+    });
+    
+    const output = await cmd.output();
+    const claudeHelp = new TextDecoder().decode(output.stdout);
+    
+    // Extract and display the options section from Claude's help
+    const lines = claudeHelp.split('\n');
+    let inOptionsSection = false;
+    let optionsFound = false;
+    
+    for (const line of lines) {
+      // Detect start of options section
+      if (line.toLowerCase().includes('options:') || line.toLowerCase().includes('flags:')) {
+        inOptionsSection = true;
+        optionsFound = true;
+        continue;
+      }
+      
+      if (inOptionsSection) {
+        // Stop at next major section (non-indented line that's not empty)
+        if (line.trim() && !line.startsWith(' ') && !line.startsWith('\t')) {
+          break;
+        }
+        
+        // Show option lines
+        if (line.trim()) {
+          console.log(`  ${line.trim()}`);
+        }
+      }
+    }
+    
+    if (!optionsFound) {
+      console.log("  (Run 'claude --help' for complete Claude CLI options)");
+    }
+  } catch (error) {
+    console.log("  (Run 'claude --help' for complete Claude CLI options)");
+  }
 }
 
 function showInteractiveInfo(args: string[]): void {
