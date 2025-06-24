@@ -278,9 +278,10 @@ Claude CLI Options (all passed through transparently):
           break;
         }
         
-        // Show option lines
+        // Show option lines, replacing 'claude' with 'ccgit' in examples
         if (line.trim()) {
-          console.log(`  ${line.trim()}`);
+          const modifiedLine = line.replace(/claude\s+/g, 'ccgit ');
+          console.log(`  ${modifiedLine.trim()}`);
         }
       }
     }
