@@ -1,7 +1,6 @@
 #!/usr/bin/env -S deno run --allow-all
 import { $ } from "jsr:@david/dax@0.40.0";
 import * as git from "./git.ts";
-import { checkoutSession, startSession, listSessions } from "./history.ts";
 import type { ClaudeOutput } from "./types.ts";
 
 // Constants
@@ -293,27 +292,6 @@ function showInteractiveInfo(args: string[]): void {
 
 async function main() {
   const args = Deno.args;
-  
-  // Handle ccgit-specific commands
-  switch (args[0]) {
-    case 'checkout':
-      if (args[1]) {
-        await checkoutSession(args[1]);
-        return;
-      }
-      break;
-      
-    case 'start':
-      if (args[1]) {
-        await startSession(args[1]);
-        return;
-      }
-      break;
-      
-    case 'list':
-      await listSessions();
-      return;
-  }
   
   // Handle help
   if (args.includes('--help') || args.includes('-h')) {
