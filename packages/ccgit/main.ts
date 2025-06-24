@@ -245,6 +245,7 @@ Examples:
   ccgit "Fix the bug"          Single prompt to Claude
   ccgit -c                     Continue last Claude conversation
   ccgit --resume abc123        Resume a Claude session
+  ccgit /orchestrator          Start with orchestrator mode
   ccgit --dangerously-skip-permissions  Start with permissions bypassed
 
 Claude CLI Options (all passed through transparently):
