@@ -28,7 +28,7 @@
   "compilerOptions": {
     "lib": ["deno.ns", "deno.unstable", "esnext", "dom"]
   },
-  "nodeModulesDir": true,
+  "nodeModulesDir": "auto",
   "lint": {
     "rules": {
       "tags": ["recommended"],
