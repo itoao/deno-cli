@@ -1,10 +1,5 @@
 import { query, type SDKMessage } from "npm:@anthropic-ai/claude-code";
-
-export interface GitFileChange {
-  path: string;
-  status: 'A' | 'M' | 'D' | 'R' | 'C' | 'U' | 'T';
-  diff?: string;
-}
+import type { GitFileChange } from "./types.ts";
 
 interface CommitTitleConfig {
   maxCommitTitleLength: number;
