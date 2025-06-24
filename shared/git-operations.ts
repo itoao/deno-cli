@@ -1,5 +1,5 @@
 import { $ } from "jsr:@david/dax@0.40.0";
-import type { GitFileChange, SessionMetadata } from "../packages/ccgit/types.ts";
+import type { GitFileChange, SessionMetadata } from "./types.ts";
 
 export async function getGitRoot(): Promise<string> {
   try {
