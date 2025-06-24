@@ -6,8 +6,7 @@
   "imports": {
     "@anthropic-ai/claude-code": "npm:@anthropic-ai/claude-code",
     "vitest": "npm:vitest",
-    "@std/assert": "jsr:@std/assert@^1.0.0",
-    "@deno-cli/shared": "./shared/index.ts"
+    "@std/assert": "jsr:@std/assert@^1.0.0"
   },
   "tasks": {
     "test:all": "deno test",
@@ -19,10 +18,76 @@
     "ccgit:i": "deno task --filter \"@deno-cli/ccgit\" install",
     "ccarg": "deno task --filter \"@deno-cli/ccarg\" run",
     "ccarg:test": "deno task --filter \"@deno-cli/ccarg\" test",
-    "ccarg:i": "deno task --filter \"@deno-cli/ccarg\" install"
+    "ccarg:i": "deno task --filter \"@deno-cli/ccarg\" install",
+    "lint:check": "deno lint",
+    "lint:fix": "deno lint --fix",
+    "fmt:check": "deno fmt --check",
+    "fmt:fix": "deno fmt",
+    "check:all": "deno check && deno lint &deno fmt --check"
   },
   "compilerOptions": {
     "lib": ["deno.ns", "deno.unstable", "esnext", "dom"]
   },
-  "nodeModulesDir": "auto"
+  "nodeModulesDir": "auto",
+  "lint": {
+    "rules": {
+      "tags": ["recommended"],
+      "include": [
+        "ban-untagged-todo",
+        "camelcase",
+        "default-param-last",
+        "eqeqeq",
+        "explicit-function-return-type",
+        "explicit-module-boundary-types",
+        "guard-for-in",
+        "no-await-in-loop",
+        "no-console",
+        "no-const-assign",
+        "no-eval",
+        "no-explicit-any",
+        "no-fallthrough",
+        "no-implicit-any",
+        "no-non-null-assertion",
+        "no-throw-literal",
+        "no-undef",
+        "no-unused-vars",
+        "no-var",
+        "prefer-as-const",
+        "prefer-const"
+      ]
+    },
+    "exclude": [
+      "node_modules",
+      ".git",
+      "dist",
+      "build",
+      "coverage",
+      "*.min.js"
+    ]
+  },
+  "fmt": {
+    "lineWidth": 100,
+    "indentWidth": 2,
+    "singleQuote": false,
+    "semiColons": true,
+    "useTabs": false,
+    "proseWrap": "preserve",
+    "exclude": [
+      "node_modules",
+      ".git",
+      "dist",
+      "build",
+      "coverage",
+      "*.min.js",
+      "*.lock",
+      "*.json"
+    ]
+  },
+  "exclude": [
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    "coverage"
+  ]
 }

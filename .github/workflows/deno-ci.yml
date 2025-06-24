@@ -1,0 +1,55 @@
+name: Deno CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup repo
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Verify formatting
+        run: deno fmt --check
+
+      - name: Run linter
+        run: deno lint
+
+      - name: Run type checking
+        run: deno check **/*.ts
+
+      - name: Run tests
+        run: |
+          if [ -f "deno.json" ] || [ -f "deno.jsonc" ]; then
+            deno test --allow-all
+          else
+            echo "No deno.json found, skipping tests"
+          fi
+
+      - name: Generate coverage
+        if: success()
+        run: |
+          if [ -f "deno.json" ] || [ -f "deno.jsonc" ]; then
+            deno test --allow-all --coverage=cov_profile
+            deno coverage cov_profile --lcov --output=cov.lcov
+          fi
+
+      - name: Upload coverage to Codecov
+        if: success()
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./cov.lcov
+          fail_ci_if_error: false
