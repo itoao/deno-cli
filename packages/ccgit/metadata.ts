@@ -1,4 +1,4 @@
-import type { ClaudeOutput, SessionMetadata } from "./types.ts";
+import type { ClaudeOutput, SessionMetadata } from "../../shared/types.ts";
 
 const SESSION_ID_PATTERN = /Session ID: ([a-zA-Z0-9_-]+)/;
 
