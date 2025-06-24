@@ -107,6 +107,34 @@ chore: update dependencies
 Return only the title:`.replace(/\0/g, '');
 }
 
+function isValidCommitTitle(text: string): boolean {
+  if (!text || text.length === 0) return false;
+  
+  // Check if it starts with conventional commit prefix
+  const conventionalPrefixes = [
+    'feat:', 'fix:', 'docs:', 'refactor:', 'test:', 'config:', 'chore:', 
+    'style:', 'perf:', 'build:', 'ci:', 'revert:', 'wip:'
+  ];
+  
+  const hasValidPrefix = conventionalPrefixes.some(prefix => 
+    text.toLowerCase().startsWith(prefix.toLowerCase())
+  );
+  
+  // Check if it looks like explanatory text (contains common conversational phrases)
+  const conversationalPhrases = [
+    "i'll", "looking at", "based on", "here", "this", "the code", 
+    "let me", "i can see", "it appears", "from the diff", "appears to",
+    "wait for your input", "what task would you", "help you with"
+  ];
+  
+  const hasConversationalPhrase = conversationalPhrases.some(phrase =>
+    text.toLowerCase().includes(phrase.toLowerCase())
+  );
+  
+  // Valid if has prefix and doesn't contain conversational phrases
+  return hasValidPrefix && !hasConversationalPhrase;
+}
+
 function extractTitleFromMessages(messages: SDKMessage[]): string | null {
   // Check if messages is null or empty
   if (!messages || messages.length === 0) {
@@ -123,9 +151,15 @@ function extractTitleFromMessages(messages: SDKMessage[]): string | null {
 
     if (message.type === "result" && "result" in message && message.result) {
       const title = String(message.result).trim();
-      // Extract only the commit title, remove any extra explanatory text
       const lines = title.split("\n");
-      return lines[0].trim();
+      
+      // Try each line to find a valid commit title
+      for (const line of lines) {
+        const cleanLine = line.trim();
+        if (isValidCommitTitle(cleanLine)) {
+          return cleanLine;
+        }
+      }
     }
 
     if (
@@ -135,9 +169,15 @@ function extractTitleFromMessages(messages: SDKMessage[]): string | null {
       for (const content of message.message.content) {
         if (content?.type === "text" && content.text) {
           const title = String(content.text).trim();
-          // Extract only the commit title, remove any extra explanatory text
           const lines = title.split("\n");
-          return lines[0].trim();
+          
+          // Try each line to find a valid commit title
+          for (const line of lines) {
+            const cleanLine = line.trim();
+            if (isValidCommitTitle(cleanLine)) {
+              return cleanLine;
+            }
+          }
         }
       }
     }
