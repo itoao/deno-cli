@@ -33,7 +33,7 @@ export async function startSession(name: string): Promise<void> {
 
 export async function listSessions(): Promise<void> {
   try {
-    const result = await $`git log --grep="Session-ID:" --format="%H|%ai|%B" --reverse`.text();
+    const result = await $`git log --grep='Session-ID:' --format='%H|%ai|%B' --reverse --all`.text();
     const commits = result.trim().split('\n\n').filter(Boolean);
     
     if (commits.length === 0) {
